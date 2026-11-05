@@ -12,6 +12,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Tailwind CSS CDN -->
+  <script src="/lame.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -2254,6 +2256,95 @@
       }
     }
 
+    // --- COMPRESOR DE AUDIO INTELIGENTE PARA VERCEL (LÍMITE 4.5 MB) ---
+    async function prepareAudioForAI(file) {
+      // Si el archivo ya es MP3 y pesa menos de 2 MB, usarlo directamente
+      const isMp3OrOgg = file.type.includes('mp3') || file.type.includes('mpeg') || file.type.includes('ogg');
+      if (file.size <= 2 * 1024 * 1024 && isMp3OrOgg) {
+        return {
+          base64: await fileToBase64(file),
+          mimeType: file.type || 'audio/mp3',
+          format: file.type.includes('ogg') ? 'ogg' : 'mp3',
+          original: true
+        };
+      }
+
+      console.log(`[Audio Optimizer] Procesando audio de ${(file.size / (1024 * 1024)).toFixed(2)} MB para la IA...`);
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error('AudioContext no soportado en este navegador');
+        }
+
+        const audioCtx = new AudioContextClass();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        const targetSampleRate = 22050; // Óptimo para frecuencias vocales y compresión extrema
+        const duration = audioBuffer.duration;
+        const totalSamples = Math.ceil(duration * targetSampleRate);
+
+        const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const offlineCtx = new OfflineContextClass(1, totalSamples, targetSampleRate);
+
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+
+        const renderedBuffer = await offlineCtx.startRendering();
+        const channelData = renderedBuffer.getChannelData(0);
+
+        // Convertir Float32Array (-1.0 a 1.0) a Int16Array (-32768 a 32767)
+        const int16Samples = new Int16Array(channelData.length);
+        for (let i = 0; i < channelData.length; i++) {
+          const s = Math.max(-1, Math.min(1, channelData[i]));
+          int16Samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const lame = window.lamejs || (typeof lamejs !== 'undefined' ? lamejs : null);
+        if (lame && lame.Mp3Encoder) {
+          // 1 canal mono, 22050 Hz, 48 kbps mono MP3 (Excelente claridad vocal, ~350 KB por minuto)
+          const mp3encoder = new lame.Mp3Encoder(1, targetSampleRate, 48);
+          const mp3Data = [];
+          const sampleBlockSize = 1152;
+
+          for (let i = 0; i < int16Samples.length; i += sampleBlockSize) {
+            const sampleChunk = int16Samples.subarray(i, i + sampleBlockSize);
+            const mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+            if (mp3buf && mp3buf.length > 0) {
+              mp3Data.push(mp3buf);
+            }
+          }
+          const mp3buf = mp3encoder.flush();
+          if (mp3buf && mp3buf.length > 0) {
+            mp3Data.push(mp3buf);
+          }
+
+          const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+          console.log(`[Audio Optimizer] ¡Éxito! Tamaño reducido de ${(file.size / (1024 * 1024)).toFixed(2)} MB a ${(mp3Blob.size / 1024).toFixed(1)} KB (Base64: ${((mp3Blob.size * 1.33) / 1024).toFixed(1)} KB)`);
+
+          return {
+            base64: await fileToBase64(mp3Blob),
+            mimeType: 'audio/mp3',
+            format: 'mp3',
+            compressed: true
+          };
+        }
+      } catch (err) {
+        console.warn('[Audio Optimizer] Error en compresión rápida, usando archivo original:', err);
+      }
+
+      // Si falla la compresión, intentar enviar el archivo original
+      return {
+        base64: await fileToBase64(file),
+        mimeType: file.type || 'audio/mp3',
+        format: file.type.includes('ogg') ? 'ogg' : 'mp3',
+        original: true
+      };
+    }
+
     // Helper: Convert File to Base64 cleanly
     async function fileToBase64(file) {
       return new Promise((resolve, reject) => {
@@ -2369,24 +2460,35 @@
       btn.disabled = true;
 
       try {
-        // 1. Convertir archivo a base64
-        const base64Audio = await fileToBase64(uploadedFile);
-        text.textContent = 'IA escuchando y alineando fonemas en vivo...';
+        // 1. Optimizar y comprimir el audio en el navegador (evita error HTTP 413 de Vercel)
+        text.textContent = 'Optimizando audio para la IA...';
+        const prep = await prepareAudioForAI(uploadedFile);
+
+        text.textContent = 'NVIDIA IA escuchando y alineando fonemas...';
 
         const isAlignMode = rawText.length > 0;
         const res = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            audioBase64: base64Audio,
-            audioMimeType: uploadedFile.type || 'audio/mp3',
+            audioBase64: prep.base64,
+            audioMimeType: prep.mimeType,
             lyrics: rawText,
             mode: isAlignMode ? 'ALIGN_ONLY' : 'TRANSCRIBE',
             userApiKey: apiKey
           })
         });
 
-        const json = await res.json();
+        const rawRespText = await res.text();
+        let json;
+        try {
+          json = JSON.parse(rawRespText);
+        } catch (parseErr) {
+          if (res.status === 413 || rawRespText.includes('Request Entity Too Large') || rawRespText.includes('Payload Too Large')) {
+            throw new Error('El archivo de audio excede el límite de carga de la nube (4.5 MB). Intenta con una versión más corta.');
+          }
+          throw new Error(`Error del servidor (${res.status}): ${rawRespText.slice(0, 100)}`);
+        }
 
         if (!res.ok || !json.success) {
           if (json.error === 'NO_API_KEY') {
