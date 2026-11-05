@@ -193,22 +193,23 @@
           </div>
 
           <!-- Zona Dropzone de Arrastre de Audio -->
-          <div id="dropzone" onclick="triggerAudioUpload(event)" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center cursor-pointer group flex flex-col items-center justify-center min-h-[220px] select-none">
-            <input type="file" id="audio-input" accept=".mp3,.wav,.flac,.m4a,.ogg,audio/*" class="hidden" onchange="handleAudioInputChange(event)" />
+          <div id="dropzone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center group flex flex-col items-center justify-center min-h-[220px] relative select-none">
+            <!-- Input nativo invisible 100% interactivo: cubre todo el recuadro para abrir el explorador sin fallos -->
+            <input type="file" id="audio-input" accept=".mp3,.wav,.flac,.m4a,.ogg,audio/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" onchange="handleAudioInputChange(event)" />
 
-            <!-- Estado Vacío -->
-            <div id="dropzone-empty" class="flex flex-col items-center space-y-3">
-              <button type="button" onclick="triggerAudioUpload(event)" class="w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center justify-center transition-transform group-hover:scale-110 shadow-md cursor-pointer border-none outline-none">
-                <svg class="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <!-- Estado Vacío (Visible debajo del input transparente) -->
+            <div id="dropzone-empty" class="flex flex-col items-center space-y-3 pointer-events-none">
+              <div class="w-14 h-14 rounded-full bg-amber-500 group-hover:bg-amber-600 text-slate-950 flex items-center justify-center transition-transform group-hover:scale-110 shadow-md">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
-              </button>
+              </div>
               <div>
                 <p class="text-sm font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
                   Arrastra tu archivo de audio aquí
                 </p>
                 <p class="text-xs text-[#64748b] mt-1">
-                  o <button type="button" onclick="triggerAudioUpload(event)" class="text-amber-600 font-semibold underline underline-offset-2 hover:text-amber-800 cursor-pointer bg-transparent border-none p-0">explora desde tu ordenador</button>
+                  o <span class="text-amber-600 font-semibold underline underline-offset-2">explora desde tu ordenador</span>
                 </p>
               </div>
               <p class="text-[11px] font-mono text-[#94a3b8]">
@@ -216,8 +217,8 @@
               </p>
             </div>
 
-            <!-- Ficha de Audio Cargado (Se muestra al subir canción) -->
-            <div id="dropzone-loaded" class="hidden w-full bg-white border-2 border-amber-400 rounded-xl p-4 flex items-center justify-between text-left shadow-sm">
+            <!-- Ficha de Audio Cargado (z-30 para recibir clics en Play y Quitar) -->
+            <div id="dropzone-loaded" class="hidden w-full bg-white border-2 border-amber-400 rounded-xl p-4 flex items-center justify-between text-left shadow-sm z-30 relative">
               <div class="flex items-center gap-3 overflow-hidden">
                 <div class="w-10 h-10 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-sm">
                   <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -2030,6 +2031,8 @@
 
       document.getElementById('dropzone-empty').classList.add('hidden');
       document.getElementById('dropzone-loaded').classList.remove('hidden');
+      const audioInputEl = document.getElementById('audio-input');
+      if (audioInputEl) audioInputEl.classList.add('hidden');
       document.getElementById('loaded-file-name').textContent = file.name;
       document.getElementById('loaded-file-info').textContent = `${sizeMb} MB • Analizando duración...`;
 
@@ -2057,6 +2060,8 @@
       audioInput.value = '';
       document.getElementById('dropzone-empty').classList.remove('hidden');
       document.getElementById('dropzone-loaded').classList.add('hidden');
+      const audioInputEl = document.getElementById('audio-input');
+      if (audioInputEl) audioInputEl.classList.remove('hidden');
       document.getElementById('current-track-badge').textContent = 'A la espera de audio...';
       drawWaveform();
       updateTimeDisplays();
