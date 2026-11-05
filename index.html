@@ -131,10 +131,10 @@
       </div>
 
       <!-- Botón de Configuración de IA (API Key) -->
-      <button onclick="openApiKeyModal()" id="btn-ai-settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#cbd5e1] hover:border-amber-400 text-xs font-mono font-bold text-slate-700 hover:text-amber-800 shadow-xs transition-all">
-        <span>🔑</span>
+      <button onclick="openApiKeyModal()" id="btn-ai-settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#cbd5e1] hover:border-amber-400 text-xs font-mono font-bold text-slate-700 hover:text-amber-800 shadow-xs transition-all" title="Motor NVIDIA NIM activo">
+        <span>⚡</span>
         <span class="hidden md:inline">IA:</span>
-        <span id="api-key-indicator" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">Configurar</span>
+        <span id="api-key-indicator" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">🟢 NVIDIA NIM</span>
       </button>
 
       <!-- Botón de Acción Principal -->
@@ -2190,21 +2190,24 @@
       }
     }
 
-    // --- GESTIÓN DE API KEY DE IA (GEMINI MULTIMODAL AUDIO) ---
+    // --- GESTIÓN DE MOTOR DE IA (NVIDIA NIM / GEMINI) ---
     function getSavedApiKey() {
-      return (localStorage.getItem('user_gemini_api_key') || '').trim();
+      return (localStorage.getItem('user_nvidia_api_key') || localStorage.getItem('user_gemini_api_key') || '').trim();
     }
 
     function updateApiKeyIndicator() {
       const key = getSavedApiKey();
       const indicator = document.getElementById('api-key-indicator');
       if (indicator) {
-        if (key && key.length > 5) {
-          indicator.textContent = '🟢 Activa';
+        if (key && key.startsWith('AIzaSy')) {
+          indicator.textContent = '🟢 Gemini';
+          indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold';
+        } else if (key && key.startsWith('nvapi-')) {
+          indicator.textContent = '🟢 NVIDIA (Custom)';
           indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold';
         } else {
-          indicator.textContent = 'Configurar';
-          indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold';
+          indicator.textContent = '🟢 NVIDIA NIM';
+          indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold';
         }
       }
     }
@@ -2225,16 +2228,23 @@
       const input = document.getElementById('input-api-key');
       const key = (input?.value || '').trim();
       if (!key) {
+        localStorage.removeItem('user_nvidia_api_key');
         localStorage.removeItem('user_gemini_api_key');
         updateApiKeyIndicator();
         closeApiKeyModal();
-        showToast('Clave eliminada. El sistema no podrá procesar audio con IA.');
+        showToast('Usando API Key oficial de NVIDIA NIM preconfigurada en el servidor.');
         return;
       }
-      localStorage.setItem('user_gemini_api_key', key);
+      if (key.startsWith('AIzaSy')) {
+        localStorage.setItem('user_gemini_api_key', key);
+        localStorage.removeItem('user_nvidia_api_key');
+      } else {
+        localStorage.setItem('user_nvidia_api_key', key);
+        localStorage.removeItem('user_gemini_api_key');
+      }
       updateApiKeyIndicator();
       closeApiKeyModal();
-      showToast('¡Clave de IA guardada y activada con éxito!');
+      showToast('¡Clave de IA actualizada y activada con éxito!');
     }
 
     function toggleApiKeyVisibility() {
@@ -2346,14 +2356,7 @@
       }
 
       const rawText = textarea.value.trim();
-      const apiKey = getSavedApiKey();
-
-      // Si no ha ingresado API key, abrir el modal para que la configure
-      if (!apiKey) {
-        openApiKeyModal();
-        showToast('Configura tu Gemini API Key para que la IA procese el audio automáticamente');
-        return;
-      }
+      const apiKey = getSavedApiKey(); // Opcional: el servidor cuenta con NVIDIA NIM activo por defecto
 
       const btn = document.getElementById('btn-sync-lyrics');
       const spinner = document.getElementById('sync-spinner');
@@ -2471,37 +2474,40 @@
       <div class="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-base shadow-sm">
-            🔑
+            ⚡
           </div>
           <div>
-            <h3 class="text-sm font-bold text-slate-900">Motor de IA Multimodal (Gemini Audio)</h3>
-            <p class="text-[11px] text-[#64748b]">Alineación fonética automática de voz sin desfase</p>
+            <h3 class="text-sm font-bold text-slate-900">Motor de IA NVIDIA NIM (Audio Alignment)</h3>
+            <p class="text-[11px] text-[#64748b]">Alineación fonética de voz con NVIDIA Nemotron Omni</p>
           </div>
         </div>
         <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg text-sm font-bold">✕</button>
       </div>
 
       <div class="space-y-2 text-xs">
-        <label class="block font-mono font-bold text-[#475569] uppercase text-[11px]">Google Gemini API Key:</label>
+        <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+          <div class="flex items-center gap-2 font-bold text-xs">
+            <span>🟢</span>
+            <span>Servidor Conectado a NVIDIA NIM</span>
+          </div>
+          <p class="text-[11px] text-emerald-800 leading-relaxed font-sans">
+            La clave de API de NVIDIA ya está integrada y activa por defecto en el backend (<code class="bg-emerald-100 px-1 py-0.5 rounded font-mono">nvapi-Yawb9...</code>). No es necesario ingresar ninguna clave para sincronizar canciones.
+          </p>
+        </div>
+
+        <label class="block font-mono font-bold text-[#475569] uppercase text-[11px] pt-1">Personalizar Clave (Opcional):</label>
         <div class="relative">
-          <input type="password" id="input-api-key" placeholder="Pega tu clave AIzaSy..." class="w-full px-3 py-2 border border-[#cbd5e1] focus:border-amber-500 rounded-lg font-mono text-xs focus:outline-none pr-9" />
+          <input type="password" id="input-api-key" placeholder="nvapi-... o AIzaSy... (opcional)" class="w-full px-3 py-2 border border-[#cbd5e1] focus:border-amber-500 rounded-lg font-mono text-xs focus:outline-none pr-9" />
           <button type="button" onclick="toggleApiKeyVisibility()" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700">👁️</button>
         </div>
         <p class="text-[11px] text-[#64748b] leading-relaxed">
-          Se guarda de forma segura en tu navegador para procesar el audio automáticamente en el backend, descartar el intro instrumental y calcular los tiempos exactos de cada palabra.
+          Si deseas usar tu propia clave de NVIDIA NIM o Google Gemini, puedes pegarla aquí. Déjalo en blanco para usar la clave de NVIDIA del servidor.
         </p>
-        <div class="pt-1.5 bg-amber-50/80 border border-amber-200 rounded-lg p-2.5">
-          <p class="text-[11px] text-amber-900 font-medium">¿No tienes clave de Gemini todavía?</p>
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-amber-700 hover:text-amber-800 font-bold underline text-[11px] inline-flex items-center gap-1 mt-0.5">
-            <span>Obtener clave gratis en Google AI Studio</span>
-            <span>↗</span>
-          </a>
-        </div>
       </div>
 
       <div class="flex items-center justify-end gap-2 pt-3 border-t border-[#e2e8f0]">
-        <button onclick="closeApiKeyModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
-        <button onclick="saveApiKeyModal()" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-500/20 transition-all">Guardar Clave</button>
+        <button onclick="closeApiKeyModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
+        <button onclick="saveApiKeyModal()" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-500/20 transition-all">Guardar Cambios</button>
       </div>
     </div>
   </div>

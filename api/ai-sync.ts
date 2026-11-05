@@ -3,10 +3,211 @@ import { GoogleGenAI, Type } from '@google/genai';
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '10mb',
+      sizeLimit: '15mb',
     },
   },
 };
+
+const DEFAULT_NVIDIA_KEY = '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';
+
+function getAudioFormat(mimeType: string = ''): string {
+  const m = (mimeType || '').toLowerCase();
+  if (m.includes('wav')) return 'wav';
+  if (m.includes('ogg') || m.includes('opus')) return 'ogg';
+  if (m.includes('flac')) return 'flac';
+  return 'mp3';
+}
+
+function cleanAndParseJSON(raw: string): any {
+  let text = (raw || '').trim();
+  if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      return JSON.parse(text.substring(start, end + 1));
+    }
+    throw e;
+  }
+}
+
+async function alignWithNvidia(apiKey: string, audioBase64: string, format: string, lyrics: string, isAlignOnly: boolean) {
+  const systemPrompt = isAlignOnly
+    ? `You are an expert audio-to-lyrics forced alignment intelligence (identical to Lacuna.fm's AI forced aligner).
+Your goal is to accurately match the provided lyrics to the audible human voice in the song.
+STRICT RULES:
+1. Ignore instrumental intros, guitar solos, synthesizer leads, drums, and musical interludes.
+2. The very first word must start at the exact millisecond when the vocalist physically begins singing that word.
+3. Every single word must have:
+   - "word": string with trailing space or trailing '\\n' if it ends a verse/line (e.g. "Yo ", "nacimiento...\\n")
+   - "startS": exact start timestamp in seconds (float, e.g. 14.18)
+   - "endS": exact end timestamp in seconds when the voice finishes singing that word (float, e.g. 14.52)
+   - "palign": number confidence between 0.90 and 1.0
+   - "success": true
+4. Maintain exact line breaks from the provided lyrics by appending '\\n' to the final word of each line.
+5. Do NOT hallucinate or guess; base timestamps on the real vocal waveform.
+6. The final word must end exactly where the singer finishes vocalizing (do not extend to song duration).
+Return ONLY raw valid JSON matching this schema:
+{
+  "language": "es",
+  "words": [
+    {"word": "word ", "startS": 14.18, "endS": 14.52, "palign": 0.98, "success": true}
+  ]
+}`
+    : `You are an expert audio lyrics transcriber and timing engine.
+Listen to the audio, transcribe the sung lyrics, and produce millisecond-accurate word-by-word timestamps.
+For the last word of each line, append '\\n'.
+Return ONLY raw valid JSON matching this schema:
+{
+  "language": "es",
+  "words": [
+    {"word": "word ", "startS": 14.18, "endS": 14.52, "palign": 0.98, "success": true}
+  ]
+}`;
+
+  const promptText = isAlignOnly
+    ? `Audio track provided.
+Task: ALIGN_ONLY
+Exact lyrics to synchronize:
+${lyrics}
+
+Analyze the audio waveform, locate the vocal entry after the instrumental intro, and return the word-by-word alignment JSON matching the schema.`
+    : `Audio track provided.
+Task: TRANSCRIBE
+Transcribe and word-align the song lyrics from the singing vocals.`;
+
+  const payload = {
+    model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: promptText },
+          { type: 'input_audio', input_audio: { data: audioBase64, format } }
+        ]
+      }
+    ],
+    temperature: 0.1
+  };
+
+  const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`NVIDIA API Error (${response.status}): ${errText}`);
+  }
+
+  const jsonRes: any = await response.json();
+  const choice = jsonRes?.choices?.[0]?.message;
+  let rawContent = (choice?.content || '').trim();
+
+  if (!rawContent && choice?.reasoning_content) {
+    rawContent = choice.reasoning_content.trim();
+  }
+
+  const parsed = cleanAndParseJSON(rawContent);
+  return parsed;
+}
+
+async function alignWithGemini(apiKey: string, audioBase64: string, audioMimeType: string, lyrics: string, isAlignOnly: boolean) {
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'lacuna-clone-engine',
+      },
+    },
+  });
+
+  const systemPrompt = isAlignOnly
+    ? `You are an expert audio-to-lyrics forced alignment intelligence (identical to Lacuna.fm's AI forced aligner).
+Your goal is to accurately match the provided lyrics to the audible human voice in the song.
+STRICT RULES:
+1. Ignore instrumental intros, guitar solos, synthesizer leads, drums, and musical interludes.
+2. The very first word must start at the exact millisecond when the vocalist physically begins singing that word.
+3. Every single word must have:
+   - "word": string with trailing space or trailing '\\n' if it ends a verse/line (e.g. "Yo ", "nacimiento...\\n")
+   - "startS": exact start timestamp in seconds (float, e.g. 14.18)
+   - "endS": exact end timestamp in seconds when the voice finishes singing that word (float, e.g. 14.52)
+   - "palign": number confidence between 0.90 and 1.0
+   - "success": true
+4. Maintain exact line breaks from the provided lyrics by appending '\\n' to the final word of each line.
+5. Do NOT hallucinate or guess; base timestamps on the real vocal waveform.
+6. The final word must end exactly where the singer finishes vocalizing (do not extend to song duration).`
+    : `You are an expert audio lyrics transcriber and timing engine.
+Listen to the audio, transcribe the sung lyrics, and produce millisecond-accurate word-by-word timestamps.
+For the last word of each line, append '\\n'.`;
+
+  const parts: any[] = [
+    {
+      inlineData: {
+        mimeType: audioMimeType || 'audio/mp3',
+        data: audioBase64,
+      },
+    },
+  ];
+
+  if (isAlignOnly) {
+    parts.push({
+      text: `Audio Track provided above.
+Task: ALIGN_ONLY
+Exact Lyrics to synchronize:
+${lyrics}
+
+Analyze the audio waveform, locate the vocal entry after the instrumental intro, and return the word-by-word alignment JSON matching the schema.`,
+    });
+  } else {
+    parts.push({
+      text: `Audio Track provided above.
+Task: TRANSCRIBE
+Transcribe and word-align the song lyrics from the singing vocals.`,
+    });
+  }
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: { parts },
+    config: {
+      systemInstruction: systemPrompt,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          language: { type: Type.STRING },
+          words: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                word: { type: Type.STRING },
+                startS: { type: Type.NUMBER },
+                endS: { type: Type.NUMBER },
+                palign: { type: Type.NUMBER },
+                success: { type: Type.BOOLEAN },
+              },
+              required: ['word', 'startS', 'endS'],
+            },
+          },
+        },
+        required: ['words'],
+      },
+    },
+  });
+
+  return JSON.parse(response.text || '{}');
+}
 
 export default async function handler(req: any, res: any) {
   // CORS
@@ -29,16 +230,6 @@ export default async function handler(req: any, res: any) {
   try {
     const { audioBase64, audioMimeType, lyrics, mode, userApiKey } = req.body || {};
 
-    const apiKey = (userApiKey && userApiKey.trim() !== '') ? userApiKey.trim() : process.env.GEMINI_API_KEY;
-
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.includes('MY_GEMINI')) {
-      return res.status(400).json({
-        success: false,
-        error: 'NO_API_KEY',
-        message: 'No se detectó una API Key de Gemini válida. Ingrésala en el botón de Ajustes (icono de llave 🔑) o configúrala en Vercel.',
-      });
-    }
-
     if (!audioBase64) {
       return res.status(400).json({
         success: false,
@@ -47,95 +238,39 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'lacuna-clone-engine',
-        },
-      },
-    });
-
     const isAlignOnly = (mode === 'ALIGN_ONLY' || (lyrics && lyrics.trim().length > 0));
+    const format = getAudioFormat(audioMimeType);
 
-    const systemPrompt = isAlignOnly
-      ? `You are an expert audio-to-lyrics forced alignment intelligence (identical to Lacuna.fm's AI forced aligner).
-Your goal is to accurately match the provided lyrics to the audible human voice in the song.
-STRICT RULES:
-1. Ignore instrumental intros, guitar solos, synthesizer leads, drums, and musical interludes.
-2. The very first word must start at the exact millisecond when the vocalist physically begins singing that word.
-3. Every single word must have:
-   - "word": string with trailing space or trailing '\\n' if it ends a verse/line (e.g. "Yo ", "nacimiento...\\n")
-   - "startS": exact start timestamp in seconds (float, e.g. 14.18)
-   - "endS": exact end timestamp in seconds when the voice finishes singing that word (float, e.g. 14.52)
-   - "palign": number confidence between 0.90 and 1.0
-   - "success": true
-4. Maintain exact line breaks from the provided lyrics by appending '\\n' to the final word of each line.
-5. Do NOT hallucinate or guess; base timestamps on the real vocal waveform.
-6. The final word must end exactly where the singer finishes vocalizing (do not extend to song duration).`
-      : `You are an expert audio lyrics transcriber and timing engine.
-Listen to the audio, transcribe the sung lyrics, and produce millisecond-accurate word-by-word timestamps.
-For the last word of each line, append '\\n'.`;
+    // Determine AI Provider & Key
+    const nvidiaKey = (process.env.NVIDIA_API_KEY || DEFAULT_NVIDIA_KEY).trim();
+    const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+    const customKey = (userApiKey || '').trim();
 
-    const parts: any[] = [
-      {
-        inlineData: {
-          mimeType: audioMimeType || 'audio/mp3',
-          data: audioBase64,
-        },
-      },
-    ];
+    let parsedResult: any = null;
+    let providerUsed = '';
 
-    if (isAlignOnly) {
-      parts.push({
-        text: `Audio Track provided above.
-Task: ALIGN_ONLY
-Exact Lyrics to synchronize:
-${lyrics}
-
-Analyze the audio waveform, locate the vocal entry after the instrumental intro, and return the word-by-word alignment JSON matching the schema.`,
-      });
+    // If user provided a specific Gemini key (starts with AIzaSy)
+    if (customKey.startsWith('AIzaSy') || (customKey && !customKey.startsWith('nvapi-') && !nvidiaKey)) {
+      providerUsed = 'gemini';
+      parsedResult = await alignWithGemini(customKey, audioBase64, audioMimeType, lyrics || '', isAlignOnly);
     } else {
-      parts.push({
-        text: `Audio Track provided above.
-Task: TRANSCRIBE
-Transcribe and word-align the song lyrics from the singing vocals.`,
-      });
+      // Default & Preferred: NVIDIA NIM AI Engine
+      const activeNvidiaKey = (customKey.startsWith('nvapi-')) ? customKey : nvidiaKey;
+      providerUsed = 'nvidia';
+      try {
+        parsedResult = await alignWithNvidia(activeNvidiaKey, audioBase64, format, lyrics || '', isAlignOnly);
+      } catch (nvidiaErr: any) {
+        console.warn('NVIDIA NIM attempt failed, checking fallback:', nvidiaErr?.message);
+        if (geminiKey && geminiKey.startsWith('AIzaSy')) {
+          providerUsed = 'gemini-fallback';
+          parsedResult = await alignWithGemini(geminiKey, audioBase64, audioMimeType, lyrics || '', isAlignOnly);
+        } else {
+          throw nvidiaErr;
+        }
+      }
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts },
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            language: { type: Type.STRING },
-            words: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING },
-                  startS: { type: Type.NUMBER },
-                  endS: { type: Type.NUMBER },
-                  palign: { type: Type.NUMBER },
-                  success: { type: Type.BOOLEAN },
-                },
-                required: ['word', 'startS', 'endS'],
-              },
-            },
-          },
-          required: ['words'],
-        },
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
-
-    if (!parsed.words || !Array.isArray(parsed.words) || parsed.words.length === 0) {
+    if (!parsedResult || !parsedResult.words || !Array.isArray(parsedResult.words) || parsedResult.words.length === 0) {
       return res.status(500).json({
         success: false,
         error: 'EMPTY_RESULT',
@@ -145,11 +280,12 @@ Transcribe and word-align the song lyrics from the singing vocals.`,
 
     return res.json({
       success: true,
+      provider: providerUsed,
       mode: isAlignOnly ? 'ALIGN_ONLY' : 'TRANSCRIBE',
-      data: parsed,
+      data: parsedResult,
     });
   } catch (err: any) {
-    console.error('Error in /api/sync:', err);
+    console.error('Error in /api/ai-sync:', err);
     return res.status(500).json({
       success: false,
       error: err?.name || 'SYNC_ERROR',
