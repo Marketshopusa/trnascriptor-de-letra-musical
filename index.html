@@ -130,6 +130,13 @@
         <span id="credits-display">120 Credits</span>
       </div>
 
+      <!-- Botón de Configuración de IA (API Key) -->
+      <button onclick="openApiKeyModal()" id="btn-ai-settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#cbd5e1] hover:border-amber-400 text-xs font-mono font-bold text-slate-700 hover:text-amber-800 shadow-xs transition-all">
+        <span>🔑</span>
+        <span class="hidden md:inline">IA:</span>
+        <span id="api-key-indicator" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">Configurar</span>
+      </button>
+
       <!-- Botón de Acción Principal -->
       <button onclick="scrollToSyncSection()" class="hidden sm:flex items-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs lg:text-sm px-4 py-2 rounded-lg shadow-md shadow-amber-500/20 transition-all">
         <svg class="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
@@ -2183,258 +2190,168 @@
       }
     }
 
-    // --- PARSER LOCAL DE LRC / SRT CON PRESERVACIÓN EXACTA ---
-    function parseExistingLrcInput(rawLrc, totalDuration) {
-      const lines = rawLrc.split(/\r?\n/);
-      const result = [];
-      const lineTimeRegex = /^\s*(?:\[|\<|\()?\s*(\d{1,2}):(\d{2}(?:[\.,]\d{1,3})?)\s*(?:\]|\>|\))?\s*(?:-\s*)?(.*)$/;
-      const wordTagRegex = /<(\d{1,2}):(\d{2}(?:[\.,]\d{1,3})?)>([^<]+)/g;
-      const isSrt = /\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}/.test(rawLrc);
+    // --- GESTIÓN DE API KEY DE IA (GEMINI MULTIMODAL AUDIO) ---
+    function getSavedApiKey() {
+      return (localStorage.getItem('user_gemini_api_key') || '').trim();
+    }
 
-      if (isSrt) {
-        const srtBlocks = rawLrc.split(/\r?\n\r?\n/);
-        srtBlocks.forEach((block, bIdx) => {
-          const bLines = block.trim().split(/\r?\n/);
-          const timeLine = bLines.find((l) => l.includes('-->'));
-          if (timeLine) {
-            const parts = timeLine.split('-->');
-            const parseSrtTime = (tStr) => {
-              const match = tStr.trim().match(/(\d{2}):(\d{2}):(\d{2})[,\.](\d{1,3})/);
-              if (!match) return 0;
-              return parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseInt(match[3], 10) + parseInt(match[4].padEnd(3, '0'), 10) / 1000;
-            };
-            const sTime = Math.round(parseSrtTime(parts[0]) * 100) / 100;
-            const eTime = Math.round(parseSrtTime(parts[1]) * 100) / 100;
-            const textLines = bLines.filter((l) => !l.includes('-->') && !/^\d+$/.test(l.trim())).join(' ').trim();
-            if (textLines) {
-              const rawWords = textLines.split(/\s+/).filter(Boolean);
-              const span = (eTime - sTime) / Math.max(1, rawWords.length);
-              const words = rawWords.map((w, wIdx) => ({
-                id: `w-${bIdx}-${wIdx}-${Date.now()}`,
-                word: w,
-                startTime: Math.round((sTime + wIdx * span) * 100) / 100,
-                endTime: Math.round((sTime + (wIdx + 1) * span * 0.95) * 100) / 100,
-                confidence: 100,
-              }));
-              result.push({
-                id: `line-${bIdx}-${Date.now()}`,
-                startTime: sTime,
-                endTime: eTime,
-                text: textLines,
-                confidence: 100,
-                words,
-              });
-            }
-          }
-        });
-        if (result.length > 0) return result;
-      }
-
-      for (let i = 0; i < lines.length; i++) {
-        const raw = lines[i].trim();
-        if (!raw || raw.startsWith('[ti:') || raw.startsWith('[ar:') || raw.startsWith('[al:') || raw.startsWith('[by:') || raw.startsWith('[re:') || raw.startsWith('[ve:') || raw.startsWith('[length:')) {
-          continue;
+    function updateApiKeyIndicator() {
+      const key = getSavedApiKey();
+      const indicator = document.getElementById('api-key-indicator');
+      if (indicator) {
+        if (key && key.length > 5) {
+          indicator.textContent = '🟢 Activa';
+          indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold';
+        } else {
+          indicator.textContent = 'Configurar';
+          indicator.className = 'text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold';
         }
+      }
+    }
 
-        const match = raw.match(lineTimeRegex);
-        if (match && match[1] && match[2]) {
-          const mins = parseInt(match[1], 10);
-          const secs = parseFloat(match[2].replace(',', '.'));
-          const startTime = Math.round((mins * 60 + secs) * 100) / 100;
-          const content = match[3] ? match[3].trim() : '';
+    function openApiKeyModal() {
+      const modal = document.getElementById('modal-api-key');
+      const input = document.getElementById('input-api-key');
+      if (input) input.value = getSavedApiKey();
+      if (modal) modal.classList.remove('hidden');
+    }
 
-          if (!content) continue;
+    function closeApiKeyModal() {
+      const modal = document.getElementById('modal-api-key');
+      if (modal) modal.classList.add('hidden');
+    }
 
-          const words = [];
-          let cleanText = '';
+    function saveApiKeyModal() {
+      const input = document.getElementById('input-api-key');
+      const key = (input?.value || '').trim();
+      if (!key) {
+        localStorage.removeItem('user_gemini_api_key');
+        updateApiKeyIndicator();
+        closeApiKeyModal();
+        showToast('Clave eliminada. El sistema no podrá procesar audio con IA.');
+        return;
+      }
+      localStorage.setItem('user_gemini_api_key', key);
+      updateApiKeyIndicator();
+      closeApiKeyModal();
+      showToast('¡Clave de IA guardada y activada con éxito!');
+    }
 
-          if (content.includes('<') && content.includes('>')) {
-            let wordMatch;
-            while ((wordMatch = wordTagRegex.exec(content)) !== null) {
-              const wM = parseInt(wordMatch[1], 10);
-              const wS = parseFloat(wordMatch[2].replace(',', '.'));
-              const wStart = Math.round((wM * 60 + wS) * 100) / 100;
-              const wWord = wordMatch[3].trim();
-              words.push({
-                id: `w-${i}-${words.length}-${Date.now()}`,
-                word: wWord,
-                startTime: wStart,
-                endTime: wStart + 0.35,
-                confidence: 100,
-              });
-              cleanText += (cleanText ? ' ' : '') + wWord;
-            }
+    function toggleApiKeyVisibility() {
+      const input = document.getElementById('input-api-key');
+      if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+      }
+    }
 
-            for (let w = 0; w < words.length; w++) {
-              if (w < words.length - 1) {
-                words[w].endTime = words[w + 1].startTime;
-              } else {
-                words[w].endTime = words[w].startTime + 0.45;
-              }
-            }
+    // Helper: Convert File to Base64 cleanly
+    async function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result;
+          if (typeof res === 'string') {
+            const base64 = res.split(',')[1];
+            resolve(base64);
           } else {
-            cleanText = content;
-            const rawWords = cleanText.split(/\s+/).filter(Boolean);
-            const estLineDuration = Math.max(1.6, rawWords.length * 0.38);
-            const wordSpan = estLineDuration / Math.max(1, rawWords.length);
-            rawWords.forEach((rw, rIdx) => {
-              words.push({
-                id: `w-${i}-${rIdx}-${Date.now()}`,
-                word: rw,
-                startTime: Math.round((startTime + rIdx * wordSpan) * 100) / 100,
-                endTime: Math.round((startTime + (rIdx + 1) * wordSpan * 0.95) * 100) / 100,
-                confidence: 100,
-              });
-            });
+            reject(new Error('Failed to read file as string'));
           }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
 
-          result.push({
-            id: `line-${i}-${Date.now()}`,
-            startTime,
-            endTime: words.length > 0 ? words[words.length - 1].endTime : startTime + 2.8,
-            text: cleanText || content,
-            confidence: 100,
-            words,
+    // --- PROCESAMIENTO DE RESPUESTA DE IA ESTILO LACUNA.FM (WORDS.JSON) ---
+    function processLacunaWords(words) {
+      const lines = [];
+      let currentLineWords = [];
+      let lineIdx = 0;
+
+      words.forEach((w, wIdx) => {
+        const hasNewline = typeof w.word === 'string' && w.word.includes('\n');
+        const isLastWord = wIdx === words.length - 1;
+        const cleanWord = (w.word || '').replace(/[\r\n]/g, '').trim();
+
+        if (cleanWord.length > 0) {
+          currentLineWords.push({
+            id: `w-${lineIdx}-${wIdx}-${Date.now()}`,
+            word: cleanWord,
+            startTime: Math.round(Number(w.startS) * 100) / 100,
+            endTime: Math.round(Number(w.endS) * 100) / 100,
+            confidence: Math.round((Number(w.palign) || 1.0) * 100)
           });
         }
-      }
 
-      for (let j = 0; j < result.length; j++) {
-        if (j < result.length - 1) {
-          if (result[j].endTime > result[j + 1].startTime) {
-            result[j].endTime = Math.max(result[j].startTime + 0.4, result[j + 1].startTime - 0.05);
-          }
-        } else {
-          result[j].endTime = Math.min(totalDuration, result[j].startTime + 3.5);
+        if ((hasNewline || isLastWord) && currentLineWords.length > 0) {
+          const lStart = currentLineWords[0].startTime;
+          const lEnd = currentLineWords[currentLineWords.length - 1].endTime;
+          lines.push({
+            id: `l-${lineIdx}-${Date.now()}`,
+            startTime: lStart,
+            endTime: lEnd,
+            text: currentLineWords.map(cw => cw.word).join(' '),
+            confidence: 99,
+            words: [...currentLineWords]
+          });
+          currentLineWords = [];
+          lineIdx++;
         }
-      }
-
-      return result;
-    }
-
-    // --- MOTOR LOCAL DE SINCRONIZACIÓN ACÚSTICA (RESPETA INTRO Y VOZ REAL) ---
-    function generateAcousticSync(inputLyrics, trackMeta, vocalOnsets, vocalPhrases, vocalStart, vocalEnd) {
-      const duration = trackMeta?.duration || 180;
-      const rawLines = inputLyrics.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-
-      if (rawLines.length === 0) {
-        return { analysis: 'No lyrics provided', lines: [] };
-      }
-
-      // 1. INICIO DE VOZ OBLIGATORIO TRAS EL INTRO
-      // El primer verso NUNCA arranca en el segundo 1. Por defecto arranca en 14.10s (o el inicio fijado)
-      let startOffset = 14.10;
-      if (typeof vocalStart === 'number' && vocalStart >= 5.0) {
-        startOffset = vocalStart;
-      } else if (typeof detectedVocalStart === 'number' && detectedVocalStart >= 5.0) {
-        startOffset = detectedVocalStart;
-      }
-
-      // 2. FIN DE VOZ ANTES DEL OUTRO
-      let endOffset = Math.min(duration - 2, 222.0);
-      if (typeof vocalEnd === 'number' && vocalEnd > startOffset + 5) {
-        endOffset = vocalEnd;
-      } else if (typeof detectedVocalEnd === 'number' && detectedVocalEnd > startOffset + 5) {
-        endOffset = detectedVocalEnd;
-      }
-
-      const totalLines = rawLines.length;
-
-      // Cadencia musical natural para evitar estirar 6 versos en 4 minutos
-      const estimatedVerseSpan = rawLines.reduce((acc, l) => {
-        const wordsCount = l.split(/\s+/).filter(Boolean).length;
-        return acc + Math.max(3.2, wordsCount * 0.44 + 1.2);
-      }, 0);
-
-      const totalSpan = Math.max(10, endOffset - startOffset);
-      const isFullSong = estimatedVerseSpan >= (totalSpan * 0.7);
-
-      let prevEnd = startOffset;
-      const lines = rawLines.map((lineText, lIdx) => {
-        const rawWords = lineText.split(/\s+/).filter(Boolean);
-        const wordsCount = rawWords.length;
-        const estLineDuration = Math.max(2.2, Math.min(6.5, wordsCount * 0.45));
-
-        let lineStart = startOffset;
-        let lineEnd = startOffset + estLineDuration;
-
-        if (lIdx === 0) {
-          // El primer verso SIEMPRE arranca exactamente en startOffset (14.10s)
-          lineStart = startOffset;
-          lineEnd = Math.round((lineStart + estLineDuration) * 100) / 100;
-        } else if (isFullSong) {
-          const progress = lIdx / (totalLines - 1);
-          const targetStart = startOffset + progress * (totalSpan - estLineDuration);
-          lineStart = Math.max(prevEnd + 0.3, Math.round(targetStart * 100) / 100);
-
-          if (vocalOnsets && vocalOnsets.length > 0) {
-            const nearest = vocalOnsets.find((o) => o >= prevEnd + 0.2 && Math.abs(o - lineStart) < 1.8);
-            if (nearest !== undefined) {
-              lineStart = nearest;
-            }
-          }
-          lineEnd = Math.min(endOffset, Math.round((lineStart + estLineDuration) * 100) / 100);
-        } else {
-          // Versos consecutivos naturales con pausas musicales de respiración
-          const naturalPause = 1.0;
-          lineStart = Math.round((prevEnd + naturalPause) * 100) / 100;
-
-          if (vocalOnsets && vocalOnsets.length > 0) {
-            const nearest = vocalOnsets.find((o) => o >= prevEnd + 0.3 && Math.abs(o - lineStart) < 2.0);
-            if (nearest !== undefined) {
-              lineStart = nearest;
-            }
-          }
-          lineEnd = Math.round((lineStart + estLineDuration) * 100) / 100;
-        }
-
-        if (lineEnd <= lineStart) {
-          lineEnd = Math.round((lineStart + estLineDuration) * 100) / 100;
-        }
-        prevEnd = lineEnd;
-
-        // Tiempos palabra por palabra con ponderación silábica
-        const lineDuration = lineEnd - lineStart;
-        const totalChars = rawWords.reduce((acc, w) => acc + Math.max(2, w.length), 0);
-
-        let curWordStart = lineStart;
-        const words = rawWords.map((word, wIdx) => {
-          const charWeight = Math.max(2, word.length) / Math.max(1, totalChars);
-          const wDuration = Math.max(0.2, lineDuration * charWeight);
-          const wStart = Math.round(curWordStart * 100) / 100;
-          const wEnd = Math.round((curWordStart + wDuration * 0.95) * 100) / 100;
-          curWordStart += wDuration;
-
-          return {
-            id: `w-${lIdx}-${wIdx}-${Date.now()}`,
-            word,
-            startTime: wStart,
-            endTime: wEnd,
-            confidence: 98,
-          };
-        });
-
-        return {
-          id: `l-${lIdx}-${Date.now()}`,
-          startTime: lineStart,
-          endTime: lineEnd,
-          text: lineText,
-          confidence: 98,
-          words,
-        };
       });
 
-      return {
-        analysis: `Alineado acústico de ${lines.length} versos. Primer verso arranca tras el intro en ${formatTimeLrc(startOffset)} y concluye en ${formatTimeLrc(lines[lines.length - 1].endTime)}.`,
-        lines,
-      };
+      return lines;
     }
 
-    // --- EJECUCION REAL DE "SYNC MY LYRICS" ---
+    // --- EXPORTADOR ENHANCED LRC OFICIAL ESTÁNDAR A2 (IDÉNTICO A LACUNA.FM) ---
+    function generateEnhancedLrc() {
+      const headers = [
+        `[ti:${currentProject.title || 'Untitled'}]`,
+        `[ar:${currentProject.artist || 'Unknown'}]`,
+        `[re:Lacuna Studio LRC Generator]`,
+        `[ve:2.4.0-Enhanced]`,
+        `[offset:0]`,
+        ''
+      ];
+      const body = currentProject.lines.map(line => {
+        const lineStartTag = formatTimeLrc(line.startTime);
+        // Cada palabra tiene su <mm:ss.xx>palabra y al final del verso el tag de cierre de voz <mm:ss.xx>
+        const wordsFormatted = line.words.map(w => `${formatTimeWordTag(w.startTime)}${w.word}`).join(' ');
+        const lineEndTag = formatTimeWordTag(line.endTime);
+        return `${lineStartTag}${wordsFormatted} ${lineEndTag}`;
+      });
+      return headers.concat(body).join('\n') + '\n';
+    }
+
+    function generateStandardLrc() {
+      const headers = [
+        `[ti:${currentProject.title || 'Untitled'}]`,
+        `[ar:${currentProject.artist || 'Unknown'}]`,
+        `[by:Lacuna Studio]`,
+        `[offset:0]`,
+        ''
+      ];
+      const body = currentProject.lines.map(line => {
+        const lineStartTag = formatTimeLrc(line.startTime);
+        const text = line.words.map(w => w.word).join(' ');
+        return `${lineStartTag}${text}`;
+      });
+      return headers.concat(body).join('\n') + '\n';
+    }
+
+    // --- EJECUCIÓN 100% AUTOMÁTICA DE "SYNC MY LYRICS" CON IA REAL ---
     async function executeSyncLyrics() {
+      if (!uploadedFile) {
+        showToast('Sube primero un archivo de audio para sincronizar');
+        return;
+      }
+
       const rawText = textarea.value.trim();
-      if (!rawText) {
-        showToast('Pega tu letra o carga un archivo primero');
+      const apiKey = getSavedApiKey();
+
+      // Si no ha ingresado API key, abrir el modal para que la configure
+      if (!apiKey) {
+        openApiKeyModal();
+        showToast('Configura tu Gemini API Key para que la IA procese el audio automáticamente');
         return;
       }
 
@@ -2445,79 +2362,45 @@
 
       spinner.classList.remove('hidden');
       icon.classList.add('hidden');
-      text.textContent = 'Alineando fonemas y marcas de tiempo...';
+      text.textContent = 'Codificando audio para IA...';
       btn.disabled = true;
 
       try {
-        const payload = {
-          task: 'align_and_word_time',
-          lyrics: rawText,
-          trackMeta: {
-            title: currentProject.title,
-            duration: currentProject.duration || nativeAudio.duration || 180,
-            bpm: 120
-          },
-          vocalOnsets: detectedVocalOnsets,
-          vocalPhrases: detectedVocalPhrases,
-          vocalStart: detectedVocalStart,
-          vocalEnd: detectedVocalEnd
-        };
+        // 1. Convertir archivo a base64
+        const base64Audio = await fileToBase64(uploadedFile);
+        text.textContent = 'IA escuchando y alineando fonemas en vivo...';
 
-        let resultData = null;
+        const isAlignMode = rawText.length > 0;
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audioBase64: base64Audio,
+            audioMimeType: uploadedFile.type || 'audio/mp3',
+            lyrics: rawText,
+            mode: isAlignMode ? 'ALIGN_ONLY' : 'TRANSCRIBE',
+            userApiKey: apiKey
+          })
+        });
 
-        // 1. Intentar llamar al servidor de sincronización AI
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000);
-          const res = await fetch('/api/ai-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
+        const json = await res.json();
 
-          if (res.ok) {
-            const json = await res.json();
-            if (json && json.data && json.data.lines && json.data.lines.length > 0) {
-              resultData = json.data;
-            }
+        if (!res.ok || !json.success) {
+          if (json.error === 'NO_API_KEY') {
+            openApiKeyModal();
           }
-        } catch (apiErr) {
-          console.warn('API sync endpoint no disponible, procesando directamente con el motor acústico local:', apiErr);
+          throw new Error(json.message || 'Error en la sincronización con IA');
         }
 
-        // 2. Si no hay respuesta del servidor o no tiene API key, procesar de inmediato en el navegador
-        if (!resultData || !resultData.lines || resultData.lines.length === 0) {
-          const hasExistingTimestamps = /(?:\[|\<|\()?\s*\d{1,2}:\d{2}(?:[\.,]\d{1,3})?\s*(?:\]|\>|\))?|-->/.test(rawText);
-          if (hasExistingTimestamps) {
-            const parsedLines = parseExistingLrcInput(rawText, payload.trackMeta.duration);
-            if (parsedLines && parsedLines.length > 0) {
-              resultData = {
-                analysis: `Extraídos ${parsedLines.length} versos preservando tiempos originales.`,
-                lines: parsedLines
-              };
-            }
+        if (json.data && json.data.words && json.data.words.length > 0) {
+          const lines = processLacunaWords(json.data.words);
+
+          if (lines.length === 0) {
+            throw new Error('La IA no pudo estructurar los versos cantados');
           }
 
-          if (!resultData) {
-            resultData = generateAcousticSync(
-              rawText,
-              payload.trackMeta,
-              detectedVocalOnsets,
-              detectedVocalPhrases,
-              detectedVocalStart,
-              detectedVocalEnd
-            );
-          }
-        }
-
-        if (resultData && resultData.lines && resultData.lines.length > 0) {
-          currentProject.lines = resultData.lines;
-
-          if (!currentProject.duration || currentProject.duration === 0) {
-            currentProject.duration = Math.ceil(resultData.lines[resultData.lines.length - 1].endTime + 4);
-          }
+          currentProject.lines = lines;
+          currentProject.duration = Math.ceil(lines[lines.length - 1].endTime + 3);
 
           if (userCredits >= 50) {
             userCredits -= 50;
@@ -2528,15 +2411,17 @@
           updateTimeDisplays();
           drawWaveform();
 
-          showToast(`¡${resultData.lines.length} versos alineados con tiempos exactos!`);
+          const v1Start = formatTimeLrc(lines[0].startTime);
+          const vLastEnd = formatTimeLrc(lines[lines.length - 1].endTime);
+          showToast(`¡${lines.length} versos alineados con IA! (Voz: ${v1Start} -> ${vLastEnd})`);
 
           document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
         } else {
-          showToast('No se pudieron procesar las marcas de tiempo');
+          throw new Error('La respuesta de la IA no contiene palabras sincronizadas');
         }
       } catch (err) {
-        console.error('Error al sincronizar:', err);
-        showToast('Error al procesar la sincronización');
+        console.error('Error al sincronizar con IA:', err);
+        showToast(err.message || 'Error al procesar el audio con IA');
       } finally {
         spinner.classList.add('hidden');
         icon.classList.remove('hidden');
@@ -2568,6 +2453,7 @@
 
     // --- INICIALIZACION ---
     window.addEventListener('DOMContentLoaded', () => {
+      updateApiKeyIndicator();
       renderLyricsEditor();
       updateTimeDisplays();
       drawWaveform();
@@ -2578,5 +2464,47 @@
       drawWaveform();
     });
   </script>
+
+  <!-- Modal de Configuración de API Key -->
+  <div id="modal-api-key" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-amber-400 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-base shadow-sm">
+            🔑
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Motor de IA Multimodal (Gemini Audio)</h3>
+            <p class="text-[11px] text-[#64748b]">Alineación fonética automática de voz sin desfase</p>
+          </div>
+        </div>
+        <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg text-sm font-bold">✕</button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <label class="block font-mono font-bold text-[#475569] uppercase text-[11px]">Google Gemini API Key:</label>
+        <div class="relative">
+          <input type="password" id="input-api-key" placeholder="Pega tu clave AIzaSy..." class="w-full px-3 py-2 border border-[#cbd5e1] focus:border-amber-500 rounded-lg font-mono text-xs focus:outline-none pr-9" />
+          <button type="button" onclick="toggleApiKeyVisibility()" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700">👁️</button>
+        </div>
+        <p class="text-[11px] text-[#64748b] leading-relaxed">
+          Se guarda de forma segura en tu navegador para procesar el audio automáticamente en el backend, descartar el intro instrumental y calcular los tiempos exactos de cada palabra.
+        </p>
+        <div class="pt-1.5 bg-amber-50/80 border border-amber-200 rounded-lg p-2.5">
+          <p class="text-[11px] text-amber-900 font-medium">¿No tienes clave de Gemini todavía?</p>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-amber-700 hover:text-amber-800 font-bold underline text-[11px] inline-flex items-center gap-1 mt-0.5">
+            <span>Obtener clave gratis en Google AI Studio</span>
+            <span>↗</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-[#e2e8f0]">
+        <button onclick="closeApiKeyModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+        <button onclick="saveApiKeyModal()" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-mono font-bold shadow-md shadow-amber-500/20 transition-all">Guardar Clave</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
