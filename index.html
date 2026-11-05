@@ -1,0 +1,2134 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lacuna LRC Generator — Word-by-Word AI Lyric Synchronization Studio</title>
+  <meta name="description" content="Generador profesional de letras sincronizadas palabra por palabra Enhanced LRC (.lrc), SRT y WebVTT para Spotify, Apple Music y reproductores de karaoke." />
+  <meta property="og:title" content="Lacuna LRC Generator — Word-by-Word AI Lyric Synchronization Studio" />
+  <meta property="og:description" content="Estudio profesional con fondo blanco y colores vivos para sincronización fonética palabra por palabra." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            lacuna: {
+              bg: '#f8fafc',
+              card: '#ffffff',
+              border: '#e2e8f0',
+              borderActive: '#cbd5e1',
+              textPrimary: '#0f172a',
+              textSecondary: '#475569',
+              textMuted: '#94a3b8',
+              amber: '#f59e0b',
+              amberHover: '#d97706',
+              amberLight: '#fef3c7',
+              orange: '#f97316',
+              gold: '#fbbf24',
+              needle: '#ef4444',
+              success: '#059669'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Studio Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .glow-amber {
+      box-shadow: 0 0 20px -2px rgba(245, 158, 11, 0.45);
+    }
+    .singing-word-active {
+      background: #fef08a !important;
+      color: #78350f !important;
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.55) !important;
+      font-weight: 700 !important;
+      transform: scale(1.06);
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.65; }
+    }
+    .pulsing-indicator {
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-[#f8fafc] text-[#0f172a] font-sans antialiased min-h-screen flex flex-col selection:bg-amber-200 selection:text-amber-900">
+
+  <!-- Audio nativo para reproducir la canción real del usuario sin sonidos sintéticos -->
+  <audio id="native-audio" preload="auto" class="hidden"></audio>
+
+  <!-- ========================================================================= -->
+  <!-- BLOQUE 1 — CABECERA (TOP NAV) - FONDO BLANCO & AMBAR VIVO                 -->
+  <!-- ========================================================================= -->
+  <header class="h-16 border-b border-[#e2e8f0] bg-white/95 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 flex items-center justify-between select-none shadow-sm">
+    <!-- Marca / Logo -->
+    <div class="flex items-center gap-8">
+      <a href="#" class="flex items-center gap-2.5 group">
+        <div class="w-9 h-9 rounded-lg bg-amber-500 border border-amber-600 flex items-center justify-center text-slate-950 shadow-md group-hover:scale-105 transition-transform">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+            <path d="M4 10a1 1 0 0 1 1 1v2a1 1 0 1 1-2 0v-2a1 1 0 0 1 1-1zm4-4a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm4-3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1zm4 5a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1zm4 3a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1z"/>
+          </svg>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-base tracking-tight text-[#0f172a] font-sans">Lacuna Studio</span>
+            <span class="text-[10px] font-mono uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded font-bold">LRC v2.4</span>
+          </div>
+          <span class="text-[11px] text-[#64748b] font-mono -mt-0.5">Word-by-Word Vocal Alignment</span>
+        </div>
+      </a>
+
+      <!-- Enlaces de Navegación -->
+      <nav class="hidden md:flex items-center gap-6 text-sm text-[#475569] font-medium">
+        <a href="#create" class="hover:text-amber-600 transition-colors">Create</a>
+        <a href="#studio" class="hover:text-amber-600 transition-colors">Studio</a>
+        <!-- Enlace activo: Release con indicador ambar vivo -->
+        <a href="#release" class="text-amber-700 font-bold flex items-center gap-1.5 relative py-5 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-500 after:shadow-sm">
+          <span>Release</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        </a>
+        <a href="#midi" class="hover:text-amber-600 transition-colors">MIDI & Notation</a>
+        <a href="#tools" class="hover:text-amber-600 transition-colors">Audio Tools</a>
+      </nav>
+    </div>
+
+    <!-- Badges y Acciones -->
+    <div class="flex items-center gap-3">
+      <!-- 120 Credits Badge -->
+      <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-mono font-bold text-amber-800 shadow-sm">
+        <svg class="w-3.5 h-3.5 text-amber-500 fill-current" viewBox="0 0 24 24">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+        <span id="credits-display">120 Credits</span>
+      </div>
+
+      <!-- Botón de Acción Principal -->
+      <button onclick="scrollToSyncSection()" class="hidden sm:flex items-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs lg:text-sm px-4 py-2 rounded-lg shadow-md shadow-amber-500/20 transition-all">
+        <svg class="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+          <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+        </svg>
+        <span>Sync my lyrics</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Notificación Toast Flotante -->
+  <div id="toast" class="fixed top-20 right-6 z-50 bg-white border border-amber-400 text-slate-900 text-xs font-mono px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 transition-all duration-300 transform translate-y-[-20px] opacity-0 pointer-events-none">
+    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 pulsing-indicator"></span>
+    <span id="toast-message" class="font-semibold">Ready</span>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-8 space-y-10">
+
+    <!-- Encabezado Hero -->
+    <div class="text-center max-w-3xl mx-auto space-y-3 pt-2">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-xs font-mono font-bold text-amber-900">
+        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span>Phonetic Syllable Recognition Engine v2.4</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-[#0f172a] tracking-tight leading-tight">
+        Lacuna AI LRC Generator
+      </h1>
+      <p class="text-sm sm:text-base text-[#475569] leading-relaxed">
+        Sube tu canción y sincroniza tu letra con precisión de milisegundos. Exporta archivos Enhanced LRC palabra por palabra para Spotify, Apple Music, Tidal y reproductores karaoke.
+      </p>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- BLOQUE 2 — ZONA DE ENTRADA Y SUBIDA (DOS COLUMNAS)                         -->
+    <!-- ========================================================================= -->
+    <section id="sync-input-section" class="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white border border-[#e2e8f0] rounded-2xl p-6 lg:p-8 shadow-sm relative overflow-hidden">
+      <!-- Acentos luminosos cálidos de fondo -->
+      <div class="absolute -top-24 -left-24 w-72 h-72 bg-amber-100/60 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-orange-100/60 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- COLUMNA IZQUIERDA: AUDIO DROPZONE & LENGUAJE -->
+      <div class="flex flex-col justify-between space-y-5 relative">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono uppercase tracking-wider text-[#475569] font-bold flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+              </svg>
+              Step 1: Audio Track / Vocal Stem
+            </span>
+            <span class="text-[11px] font-mono text-[#64748b]">MP3, WAV, FLAC, M4A, OGG</span>
+          </div>
+
+          <!-- Zona Dropzone de Arrastre de Audio -->
+          <div id="dropzone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center cursor-pointer group flex flex-col items-center justify-center min-h-[220px]">
+            <input type="file" id="audio-input" accept="audio/*" class="hidden" />
+
+            <!-- Estado Vacío -->
+            <div id="dropzone-empty" class="flex flex-col items-center space-y-3">
+              <div class="w-14 h-14 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center transition-transform group-hover:scale-110 shadow-md">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
+                  Arrastra tu archivo de audio aquí
+                </p>
+                <p class="text-xs text-[#64748b] mt-1">
+                  o <span class="text-amber-600 font-semibold underline underline-offset-2">explora desde tu ordenador</span>
+                </p>
+              </div>
+              <p class="text-[11px] font-mono text-[#94a3b8]">
+                MP3, WAV, FLAC, M4A o OGG — máx 10 MB, 10 min
+              </p>
+            </div>
+
+            <!-- Ficha de Audio Cargado (Se muestra al subir canción) -->
+            <div id="dropzone-loaded" class="hidden w-full bg-white border-2 border-amber-400 rounded-xl p-4 flex items-center justify-between text-left shadow-sm">
+              <div class="flex items-center gap-3 overflow-hidden">
+                <div class="w-10 h-10 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-sm">
+                  <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                  </svg>
+                </div>
+                <div class="truncate">
+                  <p id="loaded-file-name" class="text-xs font-bold text-slate-900 truncate">audio_track.mp3</p>
+                  <p id="loaded-file-info" class="text-[11px] font-mono text-amber-800 font-medium">0.0 MB • 00:00</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="testPlayAudioPreview(event)" id="btn-preview-audio" title="Reproducir audio" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs font-mono flex items-center gap-1.5 transition-colors shadow-sm">
+                  <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span>Play</span>
+                </button>
+                <button onclick="removeUploadedAudio(event)" title="Quitar archivo" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selector de Idioma & Créditos -->
+        <div class="pt-3 border-t border-[#e2e8f0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex-1">
+            <label for="language-select" class="block text-xs font-mono uppercase text-[#475569] font-bold mb-1">
+              Audio Language
+            </label>
+            <div class="relative">
+              <select id="language-select" class="w-full bg-[#f8fafc] border border-[#cbd5e1] focus:border-amber-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 appearance-none cursor-pointer focus:outline-none pr-8">
+                <option value="es">Spanish (Español)</option>
+                <option value="en-US">English (United States)</option>
+                <option value="en-UK">English (United Kingdom)</option>
+                <option value="fr">French (Français)</option>
+                <option value="de">German (Deutsch)</option>
+                <option value="ja">Japanese (日本語)</option>
+                <option value="ko">Korean (한국어)</option>
+                <option value="it">Italian (Italiano)</option>
+                <option value="pt">Portuguese (Português)</option>
+                <option value="zh">Mandarin (中文)</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#64748b]">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Badge 50 credits -->
+          <div class="sm:self-end">
+            <div class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 border border-amber-300 text-xs font-mono font-bold text-amber-900 whitespace-nowrap shadow-sm">
+              <svg class="w-3.5 h-3.5 text-amber-600 fill-current" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              <span>50 credits per song</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: PESTAÑAS, TEXTAREA LIMPIO Y CONTADORES -->
+      <div class="flex flex-col justify-between space-y-4 relative">
+        <div>
+          <!-- Pestañas y Carga de Archivo de Letra -->
+          <div class="flex items-center justify-between border-b border-[#e2e8f0] pb-2 mb-3">
+            <div class="flex items-center gap-2">
+              <button id="tab-paste" onclick="switchInputTab('paste')" class="px-3 py-1.5 text-xs font-mono font-bold rounded-lg bg-amber-500 text-slate-950 shadow-sm transition-all">
+                Paste my lyrics
+              </button>
+              <button id="tab-transcribe" onclick="switchInputTab('transcribe')" class="px-3 py-1.5 text-xs font-mono font-medium rounded-lg text-[#64748b] hover:text-slate-900 transition-all flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"/>
+                </svg>
+                <span>Transcribe with AI</span>
+              </button>
+            </div>
+
+            <!-- Botón Cargar .lrc / .txt y Contadores -->
+            <div class="flex items-center gap-3">
+              <input type="file" id="lrc-file-input" accept=".lrc,.txt,.srt" class="hidden" onchange="handleLrcFileUpload(event)" />
+              <button onclick="document.getElementById('lrc-file-input').click()" class="text-[11px] font-mono text-amber-700 hover:text-amber-900 font-bold flex items-center gap-1 transition-colors">
+                <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                <span>Cargar .lrc / .txt</span>
+              </button>
+
+              <div id="lyrics-counter" class="text-[11px] font-mono text-[#64748b]">
+                <span id="lines-count" class="text-slate-900 font-bold">0</span> líneas • <span id="words-count" class="text-slate-900 font-bold">0</span> palabras
+              </div>
+            </div>
+          </div>
+
+          <!-- Contenido 1: Textarea COMPLETAMENTE LIMPIO (Cero texto de prueba) -->
+          <div id="content-paste">
+            <textarea id="lyrics-textarea" rows="8" class="w-full bg-[#f8fafc] border-2 border-[#cbd5e1] focus:border-amber-500 rounded-xl p-4 text-xs sm:text-sm font-sans text-slate-900 placeholder-[#94a3b8] leading-relaxed resize-none focus:outline-none transition-colors" placeholder="Pega aquí tu letra línea por línea... (Si ya tienes un archivo .lrc descargado con marcas [mm:ss.xx] puedes pegarlo o cargarlo aquí y mantendremos exactamente los tiempos que tienes)"></textarea>
+          </div>
+
+          <!-- Contenido 2: Transcripción Automática -->
+          <div id="content-transcribe" class="hidden bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-6 text-center space-y-4">
+            <div class="w-12 h-12 mx-auto rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700">
+              <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+              </svg>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-slate-900">Transcripción Vocal desde el Audio</h4>
+              <p class="text-xs text-[#64748b] mt-1 max-w-sm mx-auto">
+                Sube tu canción en el panel izquierdo y haz clic abajo para transcribir las palabras directamente del audio.
+              </p>
+            </div>
+            <button onclick="runAutoTranscription()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs font-mono transition-all shadow-md">
+              Extraer Letra del Audio
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón Primario de Sincronización -->
+        <button id="btn-sync-lyrics" onclick="executeSyncLyrics()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-[0.99] text-slate-950 font-mono font-extrabold text-sm tracking-wide flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/25 transition-all">
+          <svg class="w-4 h-4 fill-none stroke-current stroke-2 animate-spin hidden" id="sync-spinner" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <svg class="w-4 h-4 fill-none stroke-current stroke-2" id="sync-icon" viewBox="0 0 24 24">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+          </svg>
+          <span id="sync-btn-text">Sync my lyrics</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- BLOQUE 3 — REPRODUCTOR Y EDITOR EN VIVO DE LRC (WORD-BY-WORD)              -->
+    <!-- ========================================================================= -->
+    <section id="studio-editor-section" class="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden shadow-sm">
+      <!-- Barra Superior de Estudio -->
+      <div class="border-b border-[#e2e8f0] bg-[#f8fafc] px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <!-- Lado izquierdo: Estado y Modos de Vista -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-emerald-500 pulsing-indicator"></div>
+            <span class="font-mono text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Studio Synchrony
+            </span>
+          </div>
+
+          <!-- Selector de Modo: Editor Visual vs Código LRC Real -->
+          <div class="flex items-center bg-white border border-[#cbd5e1] p-0.5 rounded-lg shadow-sm">
+            <button id="btn-view-visual" onclick="switchStudioView('visual')" class="px-3 py-1 text-xs font-mono font-bold rounded-md bg-amber-500 text-slate-950 transition-all shadow-sm flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              <span>Editor Versos</span>
+            </button>
+            <button id="btn-view-raw" onclick="switchStudioView('raw')" class="px-3 py-1 text-xs font-mono font-semibold rounded-md text-[#475569] hover:text-slate-900 transition-all flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              <span>Ver Archivo .LRC Real</span>
+            </button>
+          </div>
+
+          <span id="current-track-badge" class="text-[11px] font-mono font-bold px-2.5 py-1 rounded-md bg-amber-100 text-amber-950 border border-amber-300 truncate max-w-[220px]">
+            A la espera de audio...
+          </span>
+        </div>
+
+        <!-- Lado derecho: Botones de Descarga Directos Prominentes -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Botón Primario: Descargar archivo .LRC Real (Word-by-word) -->
+          <button onclick="exportFile('enhanced-lrc')" title="Descargar archivo .lrc con marcas fonéticas por palabra" class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-mono font-black flex items-center gap-1.5 shadow-md shadow-amber-500/25 transition-all">
+            <svg class="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span>Descargar .LRC</span>
+            <span class="text-[10px] bg-amber-300 text-amber-950 px-1 py-0.2 rounded font-mono font-bold">Word</span>
+          </button>
+
+          <!-- Botón Secundario: Descargar Standard .LRC -->
+          <button onclick="exportFile('standard-lrc')" title="Descargar archivo .lrc estándar con un timestamp por línea" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-slate-800 text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm transition-all">
+            <svg class="w-3.5 h-3.5 text-[#64748b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span>Standard .LRC</span>
+          </button>
+
+          <!-- Menú Más Formatos (SRT, VTT, TXT, Copiar) -->
+          <div class="relative">
+            <button id="btn-export-dropdown" onclick="toggleExportMenu()" class="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] text-xs font-mono font-bold flex items-center gap-1 shadow-sm transition-all" title="Más formatos de exportación">
+              <span class="hidden sm:inline">Más</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+
+            <!-- Menú Popover de Exportación -->
+            <div id="export-menu" class="hidden absolute right-0 mt-2 w-64 bg-white border border-[#cbd5e1] rounded-xl shadow-xl p-2 z-40 text-xs font-mono">
+              <div class="px-2 py-1 text-[10px] uppercase text-[#64748b] font-bold border-b border-[#e2e8f0] mb-1">
+                Formatos de Exportación
+              </div>
+              <button onclick="exportFile('enhanced-lrc')" class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-amber-50 text-slate-900 flex items-center justify-between group transition-colors">
+                <span class="font-bold text-amber-800">Enhanced LRC (.lrc)</span>
+                <span class="text-[10px] text-amber-700 bg-amber-100 px-1 rounded">&lt;word tags&gt;</span>
+              </button>
+              <button onclick="exportFile('standard-lrc')" class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-900 flex items-center justify-between group transition-colors">
+                <span class="font-semibold">Standard LRC (.lrc)</span>
+                <span class="text-[10px] text-[#64748b] bg-slate-100 px-1 rounded">[mm:ss.xx]</span>
+              </button>
+              <button onclick="exportFile('srt')" class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-900 flex items-center justify-between group transition-colors">
+                <span class="font-semibold">Subtítulos SRT (.srt)</span>
+                <span class="text-[10px] text-[#64748b] bg-slate-100 px-1 rounded">Video</span>
+              </button>
+              <button onclick="exportFile('vtt')" class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-900 flex items-center justify-between group transition-colors">
+                <span class="font-semibold">Subtítulos WebVTT (.vtt)</span>
+                <span class="text-[10px] text-[#64748b] bg-slate-100 px-1 rounded">Web</span>
+              </button>
+              <button onclick="exportFile('txt')" class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-slate-50 text-slate-900 flex items-center justify-between group transition-colors">
+                <span class="font-semibold">Texto plano (.txt)</span>
+                <span class="text-[10px] text-[#64748b] bg-slate-100 px-1 rounded">Clean</span>
+              </button>
+              <div class="border-t border-[#e2e8f0] my-1"></div>
+              <button onclick="copyCurrentLrcToClipboard()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-50 text-emerald-700 font-semibold flex items-center gap-2 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <span>Copiar Enhanced LRC</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORMA DE ONDA & REPRODUCTOR -->
+      <div class="p-4 sm:p-6 bg-[#f8fafc] border-b border-[#e2e8f0]">
+        <!-- Display de Tiempo & Estado "Singing now" -->
+        <div class="flex items-center justify-between mb-2 font-mono">
+          <div class="flex items-baseline gap-2">
+            <span id="player-time-current" class="text-xl sm:text-2xl font-black text-slate-900 tracking-wider">00:00.00</span>
+            <span id="player-time-total" class="text-xs text-[#64748b]">/ 00:00.00</span>
+          </div>
+
+          <!-- Indicador Singing now en Ambar -->
+          <div id="singing-now-pill" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-xs font-mono text-amber-900 font-bold opacity-60">
+            <span class="w-2 h-2 rounded-full bg-amber-500 pulsing-indicator"></span>
+            <span>Singing now: <strong id="singing-word-target" class="text-amber-950 italic">--</strong></span>
+          </div>
+        </div>
+
+        <!-- Canvas de Forma de Onda en Fondo Blanco -->
+        <div id="waveform-container" class="relative h-28 w-full bg-white border border-[#cbd5e1] rounded-xl overflow-hidden cursor-pointer select-none shadow-inner">
+          <canvas id="waveform-canvas" class="w-full h-full block"></canvas>
+
+          <!-- Aguja Roja de Reproducción -->
+          <div id="playhead-needle" class="absolute top-0 bottom-0 w-[2.5px] bg-[#ef4444] shadow-[0_0_8px_#ef4444] pointer-events-none transition-[left] duration-75" style="left: 0%;">
+            <!-- Bandera Superior -->
+            <div class="absolute -top-1 left-1/2 -translate-x-1/2 bg-[#ef4444] text-white text-[9px] font-mono font-bold px-1.5 rounded shadow">
+              <span id="playhead-tag">00:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controles de Transporte de Audio -->
+        <div class="flex items-center justify-between mt-4">
+          <div class="flex items-center gap-2">
+            <button onclick="seekAudio(0)" title="Ir al inicio" class="p-2.5 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] hover:text-slate-900 transition-all shadow-sm">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+            <button onclick="nudgeTime(-5)" title="Retroceder 5s" class="px-3 py-2 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-xs font-mono font-bold text-[#475569] hover:text-slate-900 transition-all shadow-sm">
+              -5s
+            </button>
+
+            <!-- Botón Master Play / Pause en Ambar Vivo -->
+            <button id="btn-play-pause" onclick="togglePlayPause()" class="w-12 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30 transition-all">
+              <svg id="icon-play" class="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <svg id="icon-pause" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            </button>
+
+            <button onclick="nudgeTime(5)" title="Avanzar 5s" class="px-3 py-2 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-xs font-mono font-bold text-[#475569] hover:text-slate-900 transition-all shadow-sm">
+              +5s
+            </button>
+          </div>
+
+          <!-- Selector de Velocidad -->
+          <div class="flex items-center gap-1 font-mono text-xs">
+            <span class="text-[#64748b] text-[11px] mr-1 hidden sm:inline font-semibold">Speed:</span>
+            <button onclick="setSpeed(0.75)" class="speed-btn px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] font-bold">0.75x</button>
+            <button onclick="setSpeed(1.0)" class="speed-btn active px-2.5 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold border border-amber-500 shadow-sm">1.0x</button>
+            <button onclick="setSpeed(1.25)" class="speed-btn px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] font-bold">1.25x</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BARRA DE HERRAMIENTAS: PRECISION CONTROLS (CLON EXACTO 1:1 DE LACUNA.FM) -->
+      <div class="px-4 sm:px-6 py-3 bg-white border-b border-[#e2e8f0] flex flex-wrap items-center justify-between gap-3 text-xs font-mono select-none">
+        <!-- Controles de precisión milimétrica originales -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[10px] uppercase text-[#64748b] font-bold mr-1">Precision Controls:</span>
+          <button onclick="nudgeSelectedWord(-0.1)" title="Mover inicio de palabra -100ms" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold transition-colors">
+            [-0.1s]
+          </button>
+          <button onclick="nudgeSelectedWord(0.1)" title="Mover inicio de palabra +100ms" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold transition-colors">
+            [+0.1s]
+          </button>
+          <button onclick="snapSelectedToPlayhead()" title="Alinear palabra o verso a la aguja actual de reproducción" class="px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-400 text-emerald-800 font-bold transition-colors">
+            [Snap to playhead]
+          </button>
+          <button onclick="splitCurrentLine()" title="Dividir el verso actual" class="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] font-bold transition-colors">
+            [Split line]
+          </button>
+          <button onclick="mergeCurrentLine()" title="Unir con el siguiente verso" class="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-[#cbd5e1] text-[#475569] font-bold transition-colors">
+            [Merge line]
+          </button>
+          <button onclick="realignWordsEvenly()" title="Redistribuir palabras equitativamente" class="px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-300 text-orange-900 font-bold transition-colors">
+            [Re-align word]
+          </button>
+        </div>
+
+        <!-- Indicador de formato y total de versos de la canción -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <span id="editor-lines-summary" class="text-[11px] font-mono font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-md">
+            0 versos procesados
+          </span>
+          <div class="flex items-center gap-1.5 text-xs text-[#475569] font-medium">
+            <span class="text-[11px] text-[#64748b]">Format:</span>
+            <span class="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded text-[11px]">Enhanced LRC (v2.0)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA 1: LISTA INTERACTIVA DE VERSOS (Configurada para vista completa o scroll) -->
+      <div id="lyrics-lines-container" class="p-4 sm:p-6 space-y-3 min-h-[200px] flex flex-col justify-start transition-all">
+        <!-- Renderizado dinámicamente con JavaScript -->
+      </div>
+
+      <!-- VISTA 2: PANEL DE ARCHIVO .LRC REAL EN TEXTO PLANO (CÓDIGO PURO) -->
+      <div id="lyrics-raw-container" class="hidden p-4 sm:p-6 bg-slate-900 text-slate-100 min-h-[300px] space-y-4 font-mono text-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400 font-bold text-sm">Archivo LRC Real Estándar (.lrc)</span>
+              <span class="bg-emerald-950 text-emerald-400 border border-emerald-700 text-[10px] px-2 py-0.5 rounded font-bold">100% Compatible con Spotify, Apple Music & Karaoke</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              Este es el archivo de texto exacto con las marcas de tiempo que se genera y descarga para tu canción.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Selector de Formato Raw -->
+            <select id="raw-format-select" onchange="updateRawLrcView()" class="bg-slate-800 border border-slate-700 text-amber-300 rounded px-2.5 py-1.5 text-xs font-mono font-bold focus:outline-none">
+              <option value="enhanced">Enhanced LRC (&lt;word tags&gt;)</option>
+              <option value="standard">Standard LRC ([line tags])</option>
+            </select>
+            <button onclick="copyCurrentLrcToClipboard()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-bold text-slate-200 flex items-center gap-1.5 transition-colors">
+              <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              <span>Copiar</span>
+            </button>
+            <button onclick="downloadCurrentRawLrc()" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              <span>Descargar .LRC</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Visor de Código LRC con Scroll y Fondo Oscuro de Terminal de Estudio -->
+        <div class="relative bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-x-auto max-h-[500px] overflow-y-auto shadow-inner">
+          <pre id="raw-lrc-code" class="text-xs text-amber-100 font-mono leading-relaxed whitespace-pre font-normal select-all">
+[ti:Tu Canción]
+[ar:Artista]
+[al:Album]
+[by:Lacuna Studio LRC Generator]
+[ve:2.4.0-Enhanced]
+
+(A la espera de que subas tu canción y sincronices la lírica)
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- BLOQUE 4 — COMPARATIVA, GUIA Y SINTAXIS EN ESTILO BLANCO MODERNO           -->
+    <!-- ========================================================================= -->
+
+    <!-- SUB-BLOQUE 4.1: COMPARATIVA VISUAL (TAP-ALONG VS AI LRC) -->
+    <section class="bg-white border border-[#e2e8f0] rounded-2xl p-6 lg:p-8 space-y-6 shadow-sm">
+      <div>
+        <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+          Comparison: Manual Tap-Along vs. Lacuna AI LRC Generator
+        </h2>
+        <p class="text-xs sm:text-sm text-[#475569] mt-1">
+          Por qué las plataformas de streaming y sellos discográficos utilizan la sincronización fonética en vez del pulsado manual con barra espaciadora.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Tarjeta Método Manual -->
+        <div class="bg-[#f8fafc] border border-red-200 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-red-600 flex items-center gap-2 font-mono">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Manual Tap-Along Method
+            </h3>
+            <span class="text-[10px] font-mono font-bold text-[#64748b] bg-slate-200 px-2 py-0.5 rounded">Antiguo</span>
+          </div>
+          <ul class="space-y-2.5 text-xs text-[#475569]">
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 font-bold">✕</span>
+              <span><strong>Lento y agotador:</strong> Requiere de 15 a 30 minutos por canción escuchando y pulsando en tiempo real.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 font-bold">✕</span>
+              <span><strong>Latencia humana:</strong> El retraso de reacción inherente (300ms a 600ms) hace que la letra quede desfasada.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 font-bold">✕</span>
+              <span><strong>Línea completa únicamente:</strong> Imposible marcar palabra por palabra de forma manual sin errores constantes.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-red-500 font-bold">✕</span>
+              <span><strong>Formato único:</strong> Generalmente solo genera un archivo de texto básico que requiere conversión.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Tarjeta Lacuna AI LRC Generator -->
+        <div class="bg-amber-50/60 border-2 border-amber-400 rounded-xl p-5 space-y-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-amber-900 flex items-center gap-2 font-mono">
+              <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Lacuna AI LRC Generator
+            </h3>
+            <span class="text-[10px] font-mono bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 rounded font-bold">
+              Estándar Profesional
+            </span>
+          </div>
+          <ul class="space-y-2.5 text-xs text-slate-800">
+            <li class="flex items-start gap-2">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span><strong>Inmediatez:</strong> Alineación fonética completa en menos de 10 segundos.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span><strong>Precisión milimétrica:</strong> Detecta los ataques acústicos y formantes vocales con resolución de 10ms.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span><strong>Karaoke palabra por palabra:</strong> Inserta automáticamente marcas &lt;mm:ss.xx&gt; en cada palabra.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-emerald-600 font-bold">✓</span>
+              <span><strong>Exportación múltiple:</strong> Descarga directa en Enhanced LRC, Standard LRC, SRT, WebVTT y TXT.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUB-BLOQUE 4.2: SINTAXIS EXPLICATIVA (STANDARD VS ENHANCED LRC) -->
+    <section class="bg-white border border-[#e2e8f0] rounded-2xl p-6 lg:p-8 space-y-6 shadow-sm">
+      <div>
+        <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+          LRC Syntax Guide: Standard vs. Enhanced Format
+        </h2>
+        <p class="text-xs sm:text-sm text-[#475569] mt-1">
+          Aprende cómo las plataformas de streaming leen las marcas de tiempo y cómo las etiquetas de palabra habilitan la tipografía de karaoke activa.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Standard LRC Syntax -->
+        <div class="bg-[#f8fafc] border border-[#cbd5e1] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-slate-900">Standard Line LRC</span>
+            <span class="text-[10px] font-mono text-[#64748b]">Universal</span>
+          </div>
+          <p class="text-xs text-[#475569]">
+            Cada verso comienza con una marca de tiempo entre corchetes. La línea completa se ilumina al llegar a ese segundo.
+          </p>
+          <pre class="bg-white p-3 rounded-lg font-mono text-xs text-slate-800 overflow-x-auto leading-relaxed border border-[#e2e8f0] shadow-inner">
+[00:12.40]City lights are fading in the distance
+[00:16.85]Whispers on the radio again</pre>
+        </div>
+
+        <!-- Enhanced LRC Syntax -->
+        <div class="bg-amber-50/50 border border-amber-300 rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-amber-900">Enhanced Karaoke LRC (v2.0)</span>
+            <span class="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Spotify & Apple Music</span>
+          </div>
+          <p class="text-xs text-[#475569]">
+            Inserta marcas entre signos angulares &lt;mm:ss.xx&gt; antes de cada palabra individual, iluminándolas al compás del canto.
+          </p>
+          <pre class="bg-white p-3 rounded-lg font-mono text-xs text-amber-950 overflow-x-auto leading-relaxed border border-amber-200 shadow-inner">
+[00:12.40]&lt;00:12.40&gt;City &lt;00:12.78&gt;lights &lt;00:13.21&gt;are &lt;00:13.47&gt;fading &lt;00:14.10&gt;in &lt;00:14.30&gt;the &lt;00:14.65&gt;distance
+[00:16.85]&lt;00:16.85&gt;Whispers &lt;00:17.30&gt;on &lt;00:17.55&gt;the &lt;00:17.90&gt;radio &lt;00:18.50&gt;again</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUB-BLOQUE 4.3: GUIA DE 3 PASOS -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-white border border-[#e2e8f0] rounded-xl p-6 space-y-3 shadow-sm">
+        <div class="w-10 h-10 rounded-full bg-amber-500 text-slate-950 font-mono font-black text-sm flex items-center justify-center shadow-md">
+          01
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Sube tu Audio y Letra</h3>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          Arrastra tu archivo de audio (MP3, WAV, FLAC, M4A, OGG) y pega los versos o carga un archivo .lrc / .txt existente.
+        </p>
+      </div>
+
+      <div class="bg-white border border-[#e2e8f0] rounded-xl p-6 space-y-3 shadow-sm">
+        <div class="w-10 h-10 rounded-full bg-amber-500 text-slate-950 font-mono font-black text-sm flex items-center justify-center shadow-md">
+          02
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Alineación Fonética AI</h3>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          El analizador detecta las entradas vocales en la canción real y alinea los milisegundos exactos de cada palabra.
+        </p>
+      </div>
+
+      <div class="bg-white border border-[#e2e8f0] rounded-xl p-6 space-y-3 shadow-sm">
+        <div class="w-10 h-10 rounded-full bg-amber-500 text-slate-950 font-mono font-black text-sm flex items-center justify-center shadow-md">
+          03
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Ajuste Fino y Exportación</h3>
+        <p class="text-xs text-[#475569] leading-relaxed">
+          Prueba la reproducción en vivo con el resaltado activo y exporta tu archivo en Enhanced LRC, Standard LRC, SRT o VTT.
+        </p>
+      </div>
+    </section>
+
+    <!-- SUB-BLOQUE 4.4: FAQ ACCORDION -->
+    <section class="bg-white border border-[#e2e8f0] rounded-2xl p-6 lg:p-8 space-y-4 shadow-sm">
+      <div>
+        <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+          Preguntas Frecuentes
+        </h2>
+        <p class="text-xs sm:text-sm text-[#475569] mt-1">
+          Todo lo que necesitas saber sobre la distribución de letras sincronizadas y formatos karaoke.
+        </p>
+      </div>
+
+      <div class="space-y-3 pt-2">
+        <!-- FAQ 1 -->
+        <div class="border border-[#e2e8f0] rounded-xl overflow-hidden bg-[#f8fafc]">
+          <button onclick="toggleFaq(1)" class="w-full px-5 py-4 text-left text-sm font-bold text-slate-900 flex items-center justify-between hover:bg-slate-100 transition-colors">
+            <span>¿Cuál es la diferencia entre Standard LRC y Enhanced LRC?</span>
+            <svg id="faq-icon-1" class="w-4 h-4 text-[#64748b] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div id="faq-content-1" class="px-5 pb-4 text-xs text-[#475569] leading-relaxed hidden">
+            Standard LRC contiene una marca por línea completa (`[00:12.40] Mi verso`). Enhanced LRC inserta etiquetas individuales &lt;mm:ss.xx&gt; en cada palabra, permitiendo que reproductores como Spotify iluminen cada palabra mientras el artista la canta.
+          </div>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="border border-[#e2e8f0] rounded-xl overflow-hidden bg-[#f8fafc]">
+          <button onclick="toggleFaq(2)" class="w-full px-5 py-4 text-left text-sm font-bold text-slate-900 flex items-center justify-between hover:bg-slate-100 transition-colors">
+            <span>¿Cómo subo los archivos Enhanced LRC a Spotify y Apple Music?</span>
+            <svg id="faq-icon-2" class="w-4 h-4 text-[#64748b] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div id="faq-content-2" class="px-5 pb-4 text-xs text-[#475569] leading-relaxed hidden">
+            Puedes cargar el archivo Enhanced LRC exportado en plataformas como Musixmatch Pro, DistroKid, TuneCore o CD Baby. Spotify recibe las letras desde Musixmatch, habilitando de inmediato el karaoke dinámico.
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="border border-[#e2e8f0] rounded-xl overflow-hidden bg-[#f8fafc]">
+          <button onclick="toggleFaq(3)" class="w-full px-5 py-4 text-left text-sm font-bold text-slate-900 flex items-center justify-between hover:bg-slate-100 transition-colors">
+            <span>¿Qué formatos de audio son compatibles?</span>
+            <svg id="faq-icon-3" class="w-4 h-4 text-[#64748b] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div id="faq-content-3" class="px-5 pb-4 text-xs text-[#475569] leading-relaxed hidden">
+            Soportamos MP3, WAV, FLAC, M4A y OGG de hasta 10 MB y 10 minutos de duración. El audio se reproduce directamente desde tu archivo en tu navegador con máxima fidelidad.
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="border border-[#e2e8f0] rounded-xl overflow-hidden bg-[#f8fafc]">
+          <button onclick="toggleFaq(4)" class="w-full px-5 py-4 text-left text-sm font-bold text-slate-900 flex items-center justify-between hover:bg-slate-100 transition-colors">
+            <span>¿Qué ocurre si ya tengo una letra con marcas de tiempo?</span>
+            <svg id="faq-icon-4" class="w-4 h-4 text-[#64748b] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div id="faq-content-4" class="px-5 pb-4 text-xs text-[#475569] leading-relaxed hidden">
+            El sistema detecta automáticamente cualquier formato de tiempo [mm:ss.xx] o &lt;mm:ss.xx&gt; y conserva exactamente tus marcas originales al 100%, sin modificarlas.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- FOOTER LIMPIO EN FONDO BLANCO                                             -->
+  <!-- ========================================================================= -->
+  <footer class="border-t border-[#e2e8f0] bg-white mt-16 py-12 px-4 lg:px-8 select-none">
+    <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-8">
+      <div class="col-span-2 space-y-3">
+        <div class="flex items-center gap-2 text-slate-950 font-bold text-base">
+          <div class="w-6 h-6 rounded bg-amber-500 flex items-center justify-center text-slate-950">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M4 10a1 1 0 0 1 1 1v2a1 1 0 1 1-2 0v-2a1 1 0 0 1 1-1zm4-4a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm4-3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1zm4 5a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1zm4 3a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1z"/></svg>
+          </div>
+          <span>Lacuna Studio</span>
+        </div>
+        <p class="text-xs text-[#64748b] max-w-sm leading-relaxed">
+          Plataforma de sincronización y producción musical para artistas independientes. Exportación de letras sincronizadas palabra por palabra con precisión fonética.
+        </p>
+        <div class="text-[11px] font-mono text-[#94a3b8]">
+          © 2026 Lacuna Studio Inc. All rights reserved.
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-mono uppercase text-slate-900 font-bold mb-3">Ecosystem</h4>
+        <ul class="space-y-2 text-xs text-[#64748b] font-medium">
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Create Music</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Studio Workstation</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Release Distribution</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Royalty Split Calculator</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">AI Vocal Mastering</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-mono uppercase text-slate-900 font-bold mb-3">Audio Tools</h4>
+        <ul class="space-y-2 text-xs text-[#64748b] font-medium">
+          <li><a href="#" class="text-amber-700 font-bold">AI LRC Generator</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Stem Splitter</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">BPM & Key Finder</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Pitch Shifter</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">MIDI Converter</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-mono uppercase text-slate-900 font-bold mb-3">Community & Legal</h4>
+        <ul class="space-y-2 text-xs text-[#64748b] font-medium">
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Discord Community</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Developer API</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Terms of Service</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Privacy Policy</a></li>
+          <li><a href="#" class="hover:text-amber-600 transition-colors">Support</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: LOGICA DE AUDIO REAL Y SINCRONIZACION                         -->
+  <!-- ========================================================================= -->
+  <script>
+    // --- ESTADO LIMPIO ---
+    let currentProject = {
+      title: "Untitled Session",
+      artist: "User Track",
+      duration: 0,
+      lines: []
+    };
+
+    let userCredits = 120;
+    let selectedLineIndex = 0;
+    let selectedWordIndex = 0;
+    let isPlaying = false;
+    let playbackSpeed = 1.0;
+    let uploadedFile = null;
+    let decodedAudioBuffer = null;
+    let detectedVocalOnsets = [];
+    let waveformPeaks = [];
+
+    // Referencia al audio nativo de hardware
+    const nativeAudio = document.getElementById('native-audio');
+
+    // --- FORMATEADORES ---
+    function formatTimeLrc(seconds) {
+      if (isNaN(seconds) || seconds < 0) seconds = 0;
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      const hundredths = Math.floor((seconds % 1) * 100);
+      const mm = String(mins).padStart(2, '0');
+      const ss = String(secs).padStart(2, '0');
+      const xx = String(hundredths).padStart(2, '0');
+      return `[${mm}:${ss}.${xx}]`;
+    }
+
+    function formatTimeWordTag(seconds) {
+      if (isNaN(seconds) || seconds < 0) seconds = 0;
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      const hundredths = Math.floor((seconds % 1) * 100);
+      const mm = String(mins).padStart(2, '0');
+      const ss = String(secs).padStart(2, '0');
+      const xx = String(hundredths).padStart(2, '0');
+      return `<${mm}:${ss}.${xx}>`;
+    }
+
+    function formatTimecodeDisplay(seconds) {
+      if (isNaN(seconds) || seconds < 0) seconds = 0;
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      const hundredths = Math.floor((seconds % 1) * 100);
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toast-message');
+      msg.textContent = message;
+      toast.classList.remove('translate-y-[-20px]', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-[-20px]', 'opacity-0', 'pointer-events-none');
+      }, 3000);
+    }
+
+    // --- AUDIO NATIVO Y LISTENERS ---
+    nativeAudio.addEventListener('timeupdate', () => {
+      updateTimeDisplays();
+      highlightSingingWord();
+    });
+
+    nativeAudio.addEventListener('ended', () => {
+      isPlaying = false;
+      updatePlayButtonUI();
+      seekAudio(0);
+    });
+
+    nativeAudio.addEventListener('loadedmetadata', () => {
+      if (nativeAudio.duration && isFinite(nativeAudio.duration)) {
+        currentProject.duration = Math.round(nativeAudio.duration);
+        updateTimeDisplays();
+        drawWaveform();
+      }
+    });
+
+    function togglePlayPause() {
+      if (!uploadedFile && !nativeAudio.src) {
+        showToast('Por favor sube primero un archivo de audio');
+        return;
+      }
+
+      if (nativeAudio.paused) {
+        nativeAudio.play().then(() => {
+          isPlaying = true;
+          updatePlayButtonUI();
+          runTimeLoop();
+        }).catch(err => {
+          console.error(err);
+          showToast('Permite la reproducción de audio en tu navegador');
+        });
+      } else {
+        nativeAudio.pause();
+        isPlaying = false;
+        updatePlayButtonUI();
+      }
+    }
+
+    function updatePlayButtonUI() {
+      const playIcon = document.getElementById('icon-play');
+      const pauseIcon = document.getElementById('icon-pause');
+      const btnPlay = document.getElementById('btn-play-pause');
+
+      if (isPlaying) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        btnPlay.classList.add('glow-amber');
+      } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        btnPlay.classList.remove('glow-amber');
+      }
+    }
+
+    function runTimeLoop() {
+      if (!isPlaying) return;
+      updateTimeDisplays();
+      highlightSingingWord();
+      requestAnimationFrame(runTimeLoop);
+    }
+
+    function seekAudio(targetSec) {
+      const dur = currentProject.duration || nativeAudio.duration || 1;
+      const target = Math.max(0, Math.min(dur, targetSec));
+      if (nativeAudio.src) {
+        nativeAudio.currentTime = target;
+      }
+      updateTimeDisplays();
+      drawWaveform();
+      highlightSingingWord();
+    }
+
+    function nudgeTime(delta) {
+      const cur = nativeAudio.currentTime || 0;
+      seekAudio(cur + delta);
+    }
+
+    function setSpeed(speed) {
+      playbackSpeed = speed;
+      nativeAudio.playbackRate = speed;
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.classList.remove('bg-amber-500', 'text-slate-950', 'border-amber-500');
+        btn.classList.add('bg-white', 'text-[#475569]');
+      });
+      event.target.classList.remove('bg-white', 'text-[#475569]');
+      event.target.classList.add('bg-amber-500', 'text-slate-950', 'border-amber-500');
+      showToast(`Velocidad de reproducción: ${speed}x`);
+    }
+
+    function updateTimeDisplays() {
+      const cur = nativeAudio.currentTime || 0;
+      const dur = currentProject.duration || nativeAudio.duration || 0;
+
+      document.getElementById('player-time-current').textContent = formatTimecodeDisplay(cur);
+      document.getElementById('player-time-total').textContent = `/ ${formatTimecodeDisplay(dur)}`;
+      document.getElementById('playhead-tag').textContent = formatTimecodeDisplay(cur).slice(0, 5);
+
+      const percent = dur > 0 ? (cur / dur) * 100 : 0;
+      document.getElementById('playhead-needle').style.left = `${Math.min(100, Math.max(0, percent))}%`;
+    }
+
+    // --- VARIABLES DE ANÁLISIS ACÚSTICO VOCAL Y MARCADORES ---
+    let detectedVocalStart = 14.0; // Se detecta con precisión tras el intro instrumental
+    let detectedVocalEnd = 222.0;   // Se detecta con precisión antes del outro (ej. 03:42)
+    let detectedVocalPhrases = [];
+    let detectedVocalOnsets = [];
+
+    // --- DECODIFICACION Y ANALISIS DE FORMA DE ONDA CON FILTRO VOCAL (RESPETO AL INTRO) ---
+    async function analyzeAudioBuffer(file) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const arrayBuf = await file.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuf);
+        decodedAudioBuffer = buffer;
+
+        currentProject.duration = Math.round(buffer.duration);
+
+        const channelData = buffer.getChannelData(0);
+        const sampleRate = buffer.sampleRate || 44100;
+        const frameSize = Math.floor(sampleRate * 0.05); // Marcos de 50ms (20 análisis por segundo)
+        const totalFrames = Math.floor(channelData.length / frameSize);
+
+        // --- 1. FILTRADO OFFLINE: AISLAMIENTO DE FORMANTES VOCALES (320Hz - 3400Hz) ---
+        // Elimina bombos (<120Hz), sub-bajos y platillos (>5kHz) para escuchar solo la voz humana
+        let vocalData = channelData;
+        try {
+          const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+            1,
+            Math.min(channelData.length, sampleRate * 360),
+            sampleRate
+          );
+          const src = offlineCtx.createBufferSource();
+          src.buffer = buffer;
+
+          const hp = offlineCtx.createBiquadFilter();
+          hp.type = 'highpass';
+          hp.frequency.value = 320;
+
+          const lp = offlineCtx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 3400;
+
+          const peak = offlineCtx.createBiquadFilter();
+          peak.type = 'peaking';
+          peak.frequency.value = 1450;
+          peak.Q.value = 1.0;
+          peak.gain.value = 6.0;
+
+          src.connect(hp);
+          hp.connect(lp);
+          lp.connect(peak);
+          peak.connect(offlineCtx.destination);
+          src.start(0);
+
+          const rendered = await offlineCtx.startRendering();
+          vocalData = rendered.getChannelData(0);
+        } catch (filterErr) {
+          console.warn('Filtro vocal offline en fallback:', filterErr);
+        }
+
+        // --- 2. CÁLCULO DE ENERGÍA RMS EN LA BANDA VOCAL ---
+        const frameEnergies = [];
+        let maxVocalEnergy = 0;
+
+        for (let f = 0; f < totalFrames; f++) {
+          let sumSq = 0;
+          const startSample = f * frameSize;
+          for (let s = 0; s < frameSize; s += 4) {
+            const val = vocalData[startSample + s] || 0;
+            sumSq += val * val;
+          }
+          const rms = Math.sqrt(sumSq / (frameSize / 4));
+          frameEnergies.push(rms);
+          if (rms > maxVocalEnergy) maxVocalEnergy = rms;
+        }
+
+        // --- 3. MEDICIÓN DEL SUELO DEL INTRO INSTRUMENTAL ---
+        // Analizar los primeros 3 segundos para calibrar el volumen del fondo instrumental
+        const introFrames = Math.min(60, Math.floor(totalFrames * 0.12));
+        let introSum = 0;
+        for (let f = 0; f < introFrames; f++) {
+          introSum += frameEnergies[f];
+        }
+        const introFloor = introSum / Math.max(1, introFrames);
+
+        // Umbral de ataque silábico vocal genuino (debe superar el fondo del intro)
+        const vocalThreshold = Math.max(0.042, Math.max(introFloor * 1.5, maxVocalEnergy * 0.20));
+
+        // --- 4. DETECCIÓN DE FRASES CANTADAS Y ATAQUES SILÁBICOS ---
+        const onsets = [];
+        const activePhrases = [];
+        let currentPhrase = null;
+        let realVocalStart = -1;
+
+        for (let f = 1; f < totalFrames; f++) {
+          const tSec = Math.round((f * 0.05) * 100) / 100;
+          const e = frameEnergies[f];
+          const prevE = frameEnergies[f - 1];
+          const isVocalFrame = e >= vocalThreshold;
+
+          if (e - prevE > 0.028 && e > vocalThreshold) {
+            if (onsets.length === 0 || tSec - onsets[onsets.length - 1] >= 0.14) {
+              onsets.push(tSec);
+            }
+          }
+
+          if (isVocalFrame) {
+            if (!currentPhrase) {
+              currentPhrase = { start: tSec, end: tSec + 0.05, frames: 1 };
+            } else {
+              currentPhrase.end = tSec + 0.05;
+              currentPhrase.frames++;
+            }
+          } else {
+            if (currentPhrase) {
+              // Pausa respiratoria entre versos (> 0.5s)
+              if (tSec - currentPhrase.end > 0.5) {
+                const phraseDur = currentPhrase.end - currentPhrase.start;
+                // Si la frase dura más de 0.8s, es un verso cantado genuino
+                if (phraseDur >= 0.8) {
+                  activePhrases.push({
+                    start: Math.round(currentPhrase.start * 100) / 100,
+                    end: Math.round(currentPhrase.end * 100) / 100
+                  });
+                  if (realVocalStart === -1) {
+                    realVocalStart = currentPhrase.start;
+                  }
+                }
+                currentPhrase = null;
+              }
+            }
+          }
+        }
+
+        if (currentPhrase && currentPhrase.end - currentPhrase.start >= 0.8) {
+          activePhrases.push({
+            start: Math.round(currentPhrase.start * 100) / 100,
+            end: Math.round(currentPhrase.end * 100) / 100
+          });
+          if (realVocalStart === -1) realVocalStart = currentPhrase.start;
+        }
+
+        // --- 5. DETERMINAR EL INICIO REAL DE LA VOZ (DESPUÉS DEL INTRO) ---
+        if (realVocalStart > 0) {
+          detectedVocalStart = realVocalStart;
+        } else if (onsets.length > 0) {
+          detectedVocalStart = onsets[0];
+        } else {
+          detectedVocalStart = 14.0;
+        }
+
+        // --- 6. DETERMINAR EL FINAL REAL DE LA VOZ (ANTES DEL OUTRO) ---
+        let realVocalEnd = Math.max(detectedVocalStart + 15, buffer.duration - 4.0);
+        if (activePhrases.length > 0) {
+          realVocalEnd = activePhrases[activePhrases.length - 1].end;
+        } else if (onsets.length > 0) {
+          const lastO = onsets[onsets.length - 1];
+          if (lastO > detectedVocalStart + 20) {
+            realVocalEnd = Math.min(buffer.duration - 2.0, lastO + 2.5);
+          }
+        }
+        detectedVocalEnd = realVocalEnd;
+        detectedVocalPhrases = activePhrases;
+        detectedVocalOnsets = onsets;
+
+        // Picos para el visualizador Waveform en canvas
+        const totalBars = 110;
+        const step = Math.floor(frameEnergies.length / totalBars);
+        const peaks = [];
+        for (let b = 0; b < totalBars; b++) {
+          let maxBar = 0;
+          for (let k = 0; k < step; k++) {
+            const val = frameEnergies[b * step + k] || 0;
+            if (val > maxBar) maxBar = val;
+          }
+          peaks.push(Math.min(1.0, (maxBar / (maxVocalEnergy || 1)) * 1.5));
+        }
+        waveformPeaks = peaks;
+
+        drawWaveform();
+        showToast(`Audio listo: Voz detectada desde ${formatTimeLrc(detectedVocalStart)} hasta ${formatTimeLrc(detectedVocalEnd)}`);
+      } catch (err) {
+        console.warn('Decodificación de buffer:', err);
+      }
+    }
+
+    // --- DIBUJADO DE FORMA DE ONDA EN CANVAS BLANCO ---
+    function drawWaveform() {
+      const canvas = document.getElementById('waveform-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const width = canvas.parentElement.clientWidth;
+      const height = canvas.parentElement.clientHeight;
+
+      canvas.width = width * (window.devicePixelRatio || 1);
+      canvas.height = height * (window.devicePixelRatio || 1);
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const totalBars = waveformPeaks.length > 0 ? waveformPeaks.length : 95;
+      const barSpacing = width / totalBars;
+      const barWidth = Math.max(2, barSpacing * 0.65);
+      const cur = nativeAudio.currentTime || 0;
+      const dur = currentProject.duration || nativeAudio.duration || 1;
+      const playedBars = (cur / dur) * totalBars;
+
+      for (let i = 0; i < totalBars; i++) {
+        let amp = 0.2;
+        if (waveformPeaks.length > 0) {
+          amp = waveformPeaks[i];
+        } else {
+          amp = 0.12; // Barras sutiles en reposo
+        }
+
+        const barHeight = Math.max(4, amp * (height * 0.82));
+        const x = i * barSpacing;
+        const y = (height - barHeight) / 2;
+
+        if (i <= playedBars && uploadedFile) {
+          ctx.fillStyle = '#f59e0b'; // Ambar iluminado para audio ya reproducido
+        } else {
+          ctx.fillStyle = uploadedFile ? '#cbd5e1' : '#e2e8f0'; // Gris pizarra claro no reproducido
+        }
+
+        ctx.beginPath();
+        ctx.roundRect(x, y, barWidth, barHeight, 2);
+        ctx.fill();
+      }
+    }
+
+    // Clic en la forma de onda para desplazarse
+    document.getElementById('waveform-container').addEventListener('click', (e) => {
+      if (!uploadedFile && !nativeAudio.src) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const percent = clickX / rect.width;
+      const dur = currentProject.duration || nativeAudio.duration || 1;
+      seekAudio(percent * dur);
+    });
+
+    // --- ESTADO DE VISUALIZACION Y AUTO-SCROLL ---
+    let isLinesExpanded = true; // Por defecto EXPANDIDO para que el usuario vea TODA la canción completa sin cortes
+    let autoScrollEnabled = true; // Desplazamiento automático al reproducir
+    let currentStudioView = 'visual'; // 'visual' | 'raw'
+
+    function toggleExpandLines() {
+      isLinesExpanded = !isLinesExpanded;
+      const container = document.getElementById('lyrics-lines-container');
+      const btnText = document.getElementById('expand-btn-text');
+      const maxIcon = document.getElementById('expand-icon-maximize');
+      const minIcon = document.getElementById('expand-icon-minimize');
+
+      if (isLinesExpanded) {
+        container.classList.remove('max-h-[520px]', 'overflow-y-auto');
+        container.classList.add('max-h-none', 'overflow-visible');
+        btnText.textContent = 'Vista Compacta (Scroll)';
+        if (maxIcon) maxIcon.classList.remove('hidden');
+        if (minIcon) minIcon.classList.add('hidden');
+        showToast('Vista Expandida: toda la canción desplegada');
+      } else {
+        container.classList.add('max-h-[520px]', 'overflow-y-auto');
+        container.classList.remove('max-h-none', 'overflow-visible');
+        btnText.textContent = 'Ver Toda la Canción';
+        if (maxIcon) maxIcon.classList.add('hidden');
+        if (minIcon) minIcon.classList.remove('hidden');
+        showToast('Vista Compacta: caja con scroll vertical');
+      }
+    }
+
+    function toggleAutoScroll() {
+      autoScrollEnabled = !autoScrollEnabled;
+      const dot = document.getElementById('autoscroll-dot');
+      const text = document.getElementById('autoscroll-text');
+      if (autoScrollEnabled) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        text.textContent = 'Auto-scroll: ON';
+        showToast('Auto-scroll activado al cantar');
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        text.textContent = 'Auto-scroll: OFF';
+        showToast('Auto-scroll desactivado');
+      }
+    }
+
+    function parseTimeStringToSeconds(str) {
+      if (!str) return 0;
+      const clean = str.trim().replace(/[\[\]\<\>\(\)]/g, '');
+      const parts = clean.split(':');
+      if (parts.length === 2) {
+        const mins = parseInt(parts[0], 10) || 0;
+        const secs = parseFloat(parts[1].replace(',', '.')) || 0;
+        return mins * 60 + secs;
+      } else if (parts.length === 3) {
+        const hrs = parseInt(parts[0], 10) || 0;
+        const mins = parseInt(parts[1], 10) || 0;
+        const secs = parseFloat(parts[2].replace(',', '.')) || 0;
+        return hrs * 3600 + mins * 60 + secs;
+      }
+      return parseFloat(str) || 0;
+    }
+
+    function editLineTime(lIdx) {
+      const line = currentProject.lines[lIdx];
+      if (!line) return;
+      const currentVal = formatTimecodeDisplay(line.startTime);
+      const input = prompt(`Ajustar tiempo del verso #${lIdx + 1} (ej. 00:14.20 o 03:42.00):`, currentVal);
+      if (input === null || input.trim() === '') return;
+
+      const newSec = parseTimeStringToSeconds(input);
+      if (isNaN(newSec) || newSec < 0) {
+        showToast('Tiempo no válido');
+        return;
+      }
+
+      const delta = newSec - line.startTime;
+      line.startTime = Math.round(newSec * 100) / 100;
+      line.endTime = Math.round((line.endTime + delta) * 100) / 100;
+      line.words.forEach(w => {
+        w.startTime = Math.max(0, Math.round((w.startTime + delta) * 100) / 100);
+        w.endTime = Math.max(w.startTime + 0.15, Math.round((w.endTime + delta) * 100) / 100);
+      });
+
+      renderLyricsEditor();
+      showToast(`Verso #${lIdx + 1} actualizado a ${formatTimeLrc(newSec)}`);
+    }
+
+    function snapLineToPlayhead(lIdx) {
+      const line = currentProject.lines[lIdx];
+      if (!line) return;
+      const cur = nativeAudio.currentTime || 0;
+      const delta = cur - line.startTime;
+      line.startTime = Math.round(cur * 100) / 100;
+      line.endTime = Math.round((line.endTime + delta) * 100) / 100;
+      line.words.forEach(w => {
+        w.startTime = Math.max(0, Math.round((w.startTime + delta) * 100) / 100);
+        w.endTime = Math.max(w.startTime + 0.15, Math.round((w.endTime + delta) * 100) / 100);
+      });
+
+      renderLyricsEditor();
+      showToast(`Verso #${lIdx + 1} fijado al audio actual (${formatTimeLrc(cur)})`);
+    }
+
+    function switchStudioView(mode) {
+      currentStudioView = mode;
+      const visualContainer = document.getElementById('lyrics-lines-container');
+      const rawContainer = document.getElementById('lyrics-raw-container');
+      const btnVisual = document.getElementById('btn-view-visual');
+      const btnRaw = document.getElementById('btn-view-raw');
+
+      if (mode === 'raw') {
+        visualContainer.classList.add('hidden');
+        rawContainer.classList.remove('hidden');
+        btnRaw.className = 'px-3 py-1 text-xs font-mono font-bold rounded-md bg-amber-500 text-slate-950 transition-all shadow-sm flex items-center gap-1.5';
+        btnVisual.className = 'px-3 py-1 text-xs font-mono font-semibold rounded-md text-[#475569] hover:text-slate-900 transition-all flex items-center gap-1.5';
+        updateRawLrcView();
+      } else {
+        rawContainer.classList.add('hidden');
+        visualContainer.classList.remove('hidden');
+        btnVisual.className = 'px-3 py-1 text-xs font-mono font-bold rounded-md bg-amber-500 text-slate-950 transition-all shadow-sm flex items-center gap-1.5';
+        btnRaw.className = 'px-3 py-1 text-xs font-mono font-semibold rounded-md text-[#475569] hover:text-slate-900 transition-all flex items-center gap-1.5';
+      }
+    }
+
+    function updateRawLrcView() {
+      const select = document.getElementById('raw-format-select');
+      const format = select ? select.value : 'enhanced';
+      const pre = document.getElementById('raw-lrc-code');
+      if (!pre) return;
+
+      if (currentProject.lines.length === 0) {
+        pre.textContent = `[ti:${currentProject.title || 'Mi Canción'}]\n[ar:${currentProject.artist || 'Artista'}]\n[by:Lacuna Studio LRC Generator]\n\n(A la espera de que sincronices tu canción)`;
+        return;
+      }
+
+      if (format === 'standard') {
+        pre.textContent = generateStandardLrc();
+      } else {
+        pre.textContent = generateEnhancedLrc();
+      }
+    }
+
+    function downloadCurrentRawLrc() {
+      const select = document.getElementById('raw-format-select');
+      const format = select ? select.value : 'enhanced';
+      exportFile(format === 'standard' ? 'standard-lrc' : 'enhanced-lrc');
+    }
+
+    // --- RESALTADO "SINGING NOW" EN AMBAR VIVO + AUTO-SCROLL ---
+    function highlightSingingWord() {
+      const cur = nativeAudio.currentTime || 0;
+      let currentWordFound = null;
+
+      currentProject.lines.forEach((line) => {
+        const isLineActive = (cur >= line.startTime && cur <= line.endTime);
+        const lineElem = document.getElementById(`line-row-${line.id}`);
+
+        if (lineElem) {
+          if (isLineActive) {
+            lineElem.classList.add('border-l-4', 'border-l-amber-500', 'bg-amber-50/70', 'shadow-md');
+            lineElem.classList.remove('border-l-transparent', 'bg-white', 'shadow-sm');
+
+            // Auto-scroll suave hacia el verso que se está cantando
+            if (autoScrollEnabled && isPlaying) {
+              lineElem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          } else {
+            lineElem.classList.remove('border-l-4', 'border-l-amber-500', 'bg-amber-50/70', 'shadow-md');
+            lineElem.classList.add('border-l-transparent', 'bg-white', 'shadow-sm');
+          }
+        }
+
+        line.words.forEach((word) => {
+          const wordBtn = document.getElementById(`word-chip-${word.id}`);
+          const isSinging = (cur >= word.startTime && cur <= word.endTime);
+
+          if (wordBtn) {
+            if (isSinging) {
+              currentWordFound = word.word;
+              wordBtn.classList.add('singing-word-active');
+            } else if (cur > word.endTime) {
+              wordBtn.classList.remove('singing-word-active');
+              wordBtn.classList.add('text-slate-900', 'bg-slate-100');
+              wordBtn.classList.remove('text-[#475569]');
+            } else {
+              wordBtn.classList.remove('singing-word-active', 'text-slate-900', 'bg-slate-100');
+              wordBtn.classList.add('text-[#64748b]');
+            }
+          }
+        });
+      });
+
+      const pill = document.getElementById('singing-now-pill');
+      const targetLabel = document.getElementById('singing-word-target');
+      if (currentWordFound) {
+        pill.classList.remove('opacity-60');
+        pill.classList.add('opacity-100', 'border-amber-400');
+        targetLabel.textContent = `"${currentWordFound}"`;
+      } else {
+        pill.classList.add('opacity-60');
+        pill.classList.remove('opacity-100', 'border-amber-400');
+        targetLabel.textContent = '--';
+      }
+    }
+
+    // --- RENDERIZADO DEL EDITOR DE VERSOS EN VIVO (CON NUMERACIÓN Y VISTA EXPANDIDA) ---
+    function renderLyricsEditor() {
+      const container = document.getElementById('lyrics-lines-container');
+      container.innerHTML = '';
+
+      // Aplicar estado expandido o compacto
+      if (isLinesExpanded) {
+        container.classList.remove('max-h-[520px]', 'overflow-y-auto');
+        container.classList.add('max-h-none', 'overflow-visible');
+      } else {
+        container.classList.add('max-h-[520px]', 'overflow-y-auto');
+        container.classList.remove('max-h-none', 'overflow-visible');
+      }
+
+      const summaryBadge = document.getElementById('editor-lines-summary');
+
+      if (currentProject.lines.length === 0) {
+        if (summaryBadge) summaryBadge.textContent = '0 versos procesados';
+        // Estado vacío y limpio
+        const emptyState = document.createElement('div');
+        emptyState.className = 'text-center py-10 space-y-3';
+        emptyState.innerHTML = `
+          <div class="w-12 h-12 mx-auto rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-slate-900">No hay lírica sincronizada todavía</p>
+            <p class="text-xs text-[#64748b] mt-1">Sube tu canción y pega tu letra arriba, luego haz clic en <strong>"Sync my lyrics"</strong> para comenzar.</p>
+          </div>
+        `;
+        container.appendChild(emptyState);
+        updateRawLrcView();
+        return;
+      }
+
+      // Actualizar resumen con cantidad de versos y rango temporal
+      if (summaryBadge) {
+        const firstTime = formatTimeLrc(currentProject.lines[0].startTime);
+        const lastTime = formatTimeLrc(currentProject.lines[currentProject.lines.length - 1].startTime);
+        summaryBadge.textContent = `${currentProject.lines.length} versos (Primer verso: ${firstTime} • Último verso: ${lastTime})`;
+      }
+
+      currentProject.lines.forEach((line, lIdx) => {
+        const row = document.createElement('div');
+        row.id = `line-row-${line.id}`;
+        const isLineSelected = selectedLineIndex === lIdx;
+        row.className = `p-3.5 rounded-xl border ${isLineSelected ? 'border-amber-400 bg-amber-50/20' : 'border-[#e2e8f0] hover:border-amber-300 bg-white'} transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm`;
+
+        // Lado izquierdo: número de verso, marca de tiempo y chips de palabras
+        const leftBox = document.createElement('div');
+        leftBox.className = 'flex flex-wrap items-center gap-2 flex-1';
+
+        // Número de verso ordinal (#01, #02, etc.)
+        const numLabel = document.createElement('span');
+        numLabel.className = 'text-[11px] font-mono font-bold text-slate-400 select-none w-7 text-right';
+        numLabel.textContent = `#${String(lIdx + 1).padStart(2, '0')}`;
+        leftBox.appendChild(numLabel);
+
+        // Botón de marca de tiempo del verso
+        const timeBtn = document.createElement('button');
+        timeBtn.className = 'px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 active:scale-95 border border-amber-300 text-xs font-mono font-bold text-amber-950 transition-colors shadow-sm';
+        timeBtn.textContent = formatTimeLrc(line.startTime);
+        timeBtn.title = 'Clic para saltar en el audio • Doble clic para editar tiempo';
+        timeBtn.onclick = () => {
+          selectedLineIndex = lIdx;
+          selectedWordIndex = 0;
+          seekAudio(line.startTime);
+          renderLyricsEditor();
+        };
+        timeBtn.ondblclick = (e) => {
+          e.stopPropagation();
+          editLineTime(lIdx);
+        };
+        leftBox.appendChild(timeBtn);
+
+        // Botón de lápiz para edición directa del tiempo
+        const editTimeBtn = document.createElement('button');
+        editTimeBtn.className = 'p-1 rounded hover:bg-amber-100 text-slate-400 hover:text-amber-800 transition-colors text-xs';
+        editTimeBtn.title = `Editar tiempo exacto del verso #${lIdx + 1}`;
+        editTimeBtn.innerHTML = '✏️';
+        editTimeBtn.onclick = (e) => {
+          e.stopPropagation();
+          editLineTime(lIdx);
+        };
+        leftBox.appendChild(editTimeBtn);
+
+        // Chips de palabras Enhanced LRC: <mm:ss.xx> palabra
+        line.words.forEach((word, wIdx) => {
+          const chip = document.createElement('button');
+          chip.id = `word-chip-${word.id}`;
+          const isWordSelected = isLineSelected && selectedWordIndex === wIdx;
+          chip.className = `px-2 py-1 rounded-md text-xs font-mono font-medium transition-all border ${isWordSelected ? 'border-amber-500 bg-amber-100 text-amber-950 font-bold shadow-sm' : 'border-transparent hover:border-amber-300 hover:bg-amber-50 text-[#475569]'} flex items-center gap-1`;
+          chip.title = `Palabra: "${word.word}" (Inicia en: ${formatTimeWordTag(word.startTime)})`;
+          chip.innerHTML = `<span class="text-[9px] text-[#94a3b8] font-normal font-mono">${formatTimeWordTag(word.startTime)}</span><span class="font-semibold">${word.word}</span>`;
+          chip.onclick = (e) => {
+            e.stopPropagation();
+            selectedLineIndex = lIdx;
+            selectedWordIndex = wIdx;
+            seekAudio(word.startTime);
+            renderLyricsEditor();
+          };
+          leftBox.appendChild(chip);
+        });
+
+        // Lado derecho: Acciones de verso (Play + Snap to Current Playhead)
+        const rightBox = document.createElement('div');
+        rightBox.className = 'flex items-center gap-1.5 self-end sm:self-center shrink-0';
+
+        // Botón Snap rápido: fija este verso exactamente en el tiempo actual del reproductor
+        const snapBtn = document.createElement('button');
+        snapBtn.className = 'px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-300 text-emerald-800 font-mono text-[11px] font-bold transition-all shadow-sm flex items-center gap-1';
+        snapBtn.title = 'Fijar este verso al tiempo exacto donde está sonando la canción';
+        snapBtn.innerHTML = `<svg class="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg><span>Snap</span>`;
+        snapBtn.onclick = () => snapLineToPlayhead(lIdx);
+        rightBox.appendChild(snapBtn);
+
+        const playLineBtn = document.createElement('button');
+        playLineBtn.className = 'px-2 py-1 rounded-lg bg-slate-100 hover:bg-amber-500 hover:text-slate-950 text-[#475569] font-mono text-[11px] font-bold transition-colors flex items-center gap-1 shadow-sm';
+        playLineBtn.title = 'Reproducir este verso';
+        playLineBtn.innerHTML = `<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span class="hidden sm:inline">Play</span>`;
+        playLineBtn.onclick = () => {
+          seekAudio(line.startTime);
+          if (nativeAudio.paused) togglePlayPause();
+        };
+        rightBox.appendChild(playLineBtn);
+
+        row.appendChild(leftBox);
+        row.appendChild(rightBox);
+        container.appendChild(row);
+      });
+
+      // Mantener sincronizado el visor de código LRC raw
+      updateRawLrcView();
+    }
+
+    // --- CONTROLES MILIMETRICOS ---
+    function nudgeSelectedWord(deltaSec) {
+      const line = currentProject.lines[selectedLineIndex];
+      if (!line) return;
+      const word = line.words[selectedWordIndex];
+      if (!word) return;
+
+      word.startTime = Math.max(0, Math.round((word.startTime + deltaSec) * 100) / 100);
+      word.endTime = Math.max(word.startTime + 0.1, Math.round((word.endTime + deltaSec) * 100) / 100);
+
+      if (selectedWordIndex === 0) {
+        line.startTime = word.startTime;
+      }
+
+      renderLyricsEditor();
+      showToast(`Ajustado "${word.word}" por ${deltaSec > 0 ? '+' : ''}${deltaSec}s`);
+    }
+
+    function snapSelectedToPlayhead() {
+      const line = currentProject.lines[selectedLineIndex];
+      if (!line) return;
+      const word = line.words[selectedWordIndex];
+      if (!word) return;
+
+      const cur = nativeAudio.currentTime || 0;
+      const delta = cur - word.startTime;
+      word.startTime = Math.round(cur * 100) / 100;
+      word.endTime = Math.round((word.endTime + delta) * 100) / 100;
+
+      if (selectedWordIndex === 0) {
+        line.startTime = word.startTime;
+      }
+
+      renderLyricsEditor();
+      showToast(`Anclado "${word.word}" a la aguja (${formatTimecodeDisplay(cur)})`);
+    }
+
+    function splitCurrentLine() {
+      const line = currentProject.lines[selectedLineIndex];
+      if (!line || line.words.length < 2) {
+        showToast('La línea debe contener al menos 2 palabras');
+        return;
+      }
+
+      const splitIndex = Math.max(1, selectedWordIndex || Math.floor(line.words.length / 2));
+      const firstWords = line.words.slice(0, splitIndex);
+      const secondWords = line.words.slice(splitIndex);
+
+      const newLine = {
+        id: `split-${Date.now()}`,
+        startTime: secondWords[0].startTime,
+        endTime: line.endTime,
+        words: secondWords
+      };
+
+      line.endTime = secondWords[0].startTime;
+      line.words = firstWords;
+
+      currentProject.lines.splice(selectedLineIndex + 1, 0, newLine);
+      renderLyricsEditor();
+      showToast('Verso dividido en 2 líneas');
+    }
+
+    function mergeCurrentLine() {
+      if (selectedLineIndex >= currentProject.lines.length - 1) {
+        showToast('No hay verso siguiente para unir');
+        return;
+      }
+
+      const current = currentProject.lines[selectedLineIndex];
+      const next = currentProject.lines[selectedLineIndex + 1];
+
+      current.endTime = next.endTime;
+      current.words = current.words.concat(next.words);
+
+      currentProject.lines.splice(selectedLineIndex + 1, 1);
+      renderLyricsEditor();
+      showToast('Unido con el siguiente verso');
+    }
+
+    function realignWordsEvenly() {
+      const line = currentProject.lines[selectedLineIndex];
+      if (!line || line.words.length === 0) return;
+
+      const duration = line.endTime - line.startTime;
+      const step = duration / line.words.length;
+
+      line.words.forEach((w, idx) => {
+        w.startTime = Math.round((line.startTime + idx * step) * 100) / 100;
+        w.endTime = Math.round((w.startTime + step * 0.95) * 100) / 100;
+      });
+
+      renderLyricsEditor();
+      showToast('Palabras re-alineadas equitativamente');
+    }
+
+    // --- EXPORTACION Y DESCARGA EN 5 FORMATOS ---
+    function toggleExportMenu() {
+      if (currentProject.lines.length === 0) {
+        showToast('Por favor sincroniza la letra antes de exportar');
+        return;
+      }
+      const menu = document.getElementById('export-menu');
+      menu.classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('export-menu');
+      const btn = document.getElementById('btn-export-dropdown');
+      if (menu && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
+    function generateEnhancedLrc() {
+      const headers = [
+        `[ti:${currentProject.title}]`,
+        `[ar:${currentProject.artist}]`,
+        `[re:Lacuna Studio LRC Generator]`,
+        `[ve:2.4.0-Enhanced]`,
+        ''
+      ];
+      const body = currentProject.lines.map(line => {
+        const wordsFormatted = line.words.map(w => `${formatTimeWordTag(w.startTime)}${w.word}`).join(' ');
+        return `${formatTimeLrc(line.startTime)}${wordsFormatted}`;
+      });
+      return headers.concat(body).join('\n');
+    }
+
+    function generateStandardLrc() {
+      const headers = [
+        `[ti:${currentProject.title}]`,
+        `[ar:${currentProject.artist}]`,
+        `[by:Lacuna Studio]`,
+        ''
+      ];
+      const body = currentProject.lines.map(line => {
+        const text = line.words.map(w => w.word).join(' ');
+        return `${formatTimeLrc(line.startTime)}${text}`;
+      });
+      return headers.concat(body).join('\n');
+    }
+
+    function generateSrt() {
+      const formatSrtTime = (seconds) => {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        const millis = Math.floor((seconds % 1) * 1000);
+        return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+      };
+
+      return currentProject.lines.map((line, idx) => {
+        const text = line.words.map(w => w.word).join(' ');
+        return `${idx + 1}\n${formatSrtTime(line.startTime)} --> ${formatSrtTime(line.endTime)}\n${text}\n`;
+      }).join('\n');
+    }
+
+    function generateVtt() {
+      const formatVttTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        const millis = Math.floor((seconds % 1) * 1000);
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+      };
+
+      const body = currentProject.lines.map((line) => {
+        const text = line.words.map(w => w.word).join(' ');
+        return `${formatVttTime(line.startTime)} --> ${formatVttTime(line.endTime)}\n${text}\n`;
+      }).join('\n');
+
+      return `WEBVTT - Generated by Lacuna Studio\n\n${body}`;
+    }
+
+    function generateTxt() {
+      return currentProject.lines.map(line => line.words.map(w => w.word).join(' ')).join('\n');
+    }
+
+    function exportFile(format) {
+      if (currentProject.lines.length === 0) {
+        showToast('Sincroniza la letra con tu canción antes de exportar');
+        return;
+      }
+
+      let content = '';
+      let cleanName = (currentProject.title || 'cancion').trim().replace(/[\\/:*?"<>|]/g, '');
+      if (!cleanName) cleanName = 'audio_lyrics';
+
+      let filename = `${cleanName}.lrc`;
+      let ext = 'lrc';
+      let mime = 'text/plain';
+
+      switch (format) {
+        case 'enhanced-lrc':
+          content = generateEnhancedLrc();
+          ext = 'lrc';
+          filename = `${cleanName}.lrc`;
+          break;
+        case 'standard-lrc':
+          content = generateStandardLrc();
+          ext = 'lrc';
+          filename = `${cleanName}_standard.lrc`;
+          break;
+        case 'srt':
+          content = generateSrt();
+          ext = 'srt';
+          filename = `${cleanName}.srt`;
+          break;
+        case 'vtt':
+          content = generateVtt();
+          ext = 'vtt';
+          filename = `${cleanName}.vtt`;
+          mime = 'text/vtt';
+          break;
+        case 'txt':
+          content = generateTxt();
+          ext = 'txt';
+          filename = `${cleanName}.txt`;
+          break;
+      }
+
+      const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const menu = document.getElementById('export-menu');
+      if (menu) menu.classList.add('hidden');
+
+      showToast(`¡Archivo "${filename}" descargado con formato LRC real!`);
+    }
+
+    function copyCurrentLrcToClipboard() {
+      const lrc = generateEnhancedLrc();
+      navigator.clipboard.writeText(lrc).then(() => {
+        showToast('Enhanced LRC copiado al portapapeles!');
+        toggleExportMenu();
+      });
+    }
+
+    // --- CARGA DE AUDIO Y DROPZONE ---
+    const dropzone = document.getElementById('dropzone');
+    const audioInput = document.getElementById('audio-input');
+
+    dropzone.addEventListener('click', () => {
+      audioInput.click();
+    });
+
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-amber-500', 'bg-amber-100/50');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-amber-500', 'bg-amber-100/50');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('audio/')) {
+        handleFileSelection(file);
+      } else {
+        showToast('Sube un archivo de audio (MP3, WAV, FLAC, M4A, OGG)');
+      }
+    });
+
+    audioInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handleFileSelection(file);
+    });
+
+    function handleFileSelection(file) {
+      uploadedFile = file;
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+
+      document.getElementById('dropzone-empty').classList.add('hidden');
+      document.getElementById('dropzone-loaded').classList.remove('hidden');
+      document.getElementById('loaded-file-name').textContent = file.name;
+      document.getElementById('loaded-file-info').textContent = `${sizeMb} MB • Analizando duración...`;
+
+      // Cargar archivo real en audio HTML5
+      const fileUrl = URL.createObjectURL(file);
+      nativeAudio.src = fileUrl;
+      nativeAudio.load();
+
+      currentProject.title = file.name.replace(/\.[^/.]+$/, "");
+      document.getElementById('current-track-badge').textContent = currentProject.title;
+
+      // Decodificación de forma de onda y transitorios acústicos
+      analyzeAudioBuffer(file);
+      showToast(`Audio cargado: "${file.name}"`);
+    }
+
+    function removeUploadedAudio(e) {
+      e.stopPropagation();
+      nativeAudio.pause();
+      nativeAudio.src = '';
+      uploadedFile = null;
+      decodedAudioBuffer = null;
+      waveformPeaks = [];
+      detectedVocalOnsets = [];
+      audioInput.value = '';
+      document.getElementById('dropzone-empty').classList.remove('hidden');
+      document.getElementById('dropzone-loaded').classList.add('hidden');
+      document.getElementById('current-track-badge').textContent = 'A la espera de audio...';
+      drawWaveform();
+      updateTimeDisplays();
+      showToast('Archivo de audio eliminado');
+    }
+
+    function testPlayAudioPreview(e) {
+      e.stopPropagation();
+      togglePlayPause();
+    }
+
+    // --- CONTADORES Y CARGA DE LIRICA ---
+    const textarea = document.getElementById('lyrics-textarea');
+    textarea.addEventListener('input', updateTextCounters);
+
+    function updateTextCounters() {
+      const text = textarea.value.trim();
+      const lines = text ? text.split('\n').filter(l => l.trim().length > 0) : [];
+      const words = text ? text.split(/\s+/).filter(w => w.length > 0) : [];
+
+      document.getElementById('lines-count').textContent = lines.length;
+      document.getElementById('words-count').textContent = words.length;
+    }
+
+    function handleLrcFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const content = ev.target.result;
+        textarea.value = content;
+        updateTextCounters();
+        showToast(`Archivo cargado: "${file.name}"`);
+
+        // Si ya contiene marcas [mm:ss.xx], sincronizar al instante
+        if (/\[\d{1,2}:\d{2}/.test(content)) {
+          executeSyncLyrics();
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function switchInputTab(tab) {
+      const btnPaste = document.getElementById('tab-paste');
+      const btnTranscribe = document.getElementById('tab-transcribe');
+      const contentPaste = document.getElementById('content-paste');
+      const contentTranscribe = document.getElementById('content-transcribe');
+
+      if (tab === 'paste') {
+        btnPaste.className = 'px-3 py-1.5 text-xs font-mono font-bold rounded-lg bg-amber-500 text-slate-950 shadow-sm transition-all';
+        btnTranscribe.className = 'px-3 py-1.5 text-xs font-mono font-medium rounded-lg text-[#64748b] hover:text-slate-900 transition-all flex items-center gap-1.5';
+        contentPaste.classList.remove('hidden');
+        contentTranscribe.classList.add('hidden');
+      } else {
+        btnTranscribe.className = 'px-3 py-1.5 text-xs font-mono font-bold rounded-lg bg-amber-500 text-slate-950 shadow-sm transition-all flex items-center gap-1.5';
+        btnPaste.className = 'px-3 py-1.5 text-xs font-mono font-medium rounded-lg text-[#64748b] hover:text-slate-900 transition-all';
+        contentPaste.classList.add('hidden');
+        contentTranscribe.classList.remove('hidden');
+      }
+    }
+
+    async function runAutoTranscription() {
+      if (!uploadedFile) {
+        showToast('Sube primero un archivo de audio para transcribir');
+        return;
+      }
+      showToast('Transcribiendo letra desde la voz...');
+      try {
+        const res = await fetch('/api/ai-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task: 'transcribe_and_align',
+            trackMeta: {
+              title: currentProject.title,
+              duration: currentProject.duration || nativeAudio.duration || 180
+            },
+            vocalOnsets: detectedVocalOnsets
+          })
+        });
+        const json = await res.json();
+        if (json.data && json.data.lines) {
+          currentProject.lines = json.data.lines;
+          textarea.value = json.data.lines.map(l => l.text).join('\n');
+          switchInputTab('paste');
+          updateTextCounters();
+          renderLyricsEditor();
+          showToast('Transcripción y marcas de tiempo calculadas');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error en la transcripción. Pega la letra manualmente.');
+      }
+    }
+
+    // --- EJECUCION REAL DE "SYNC MY LYRICS" ---
+    async function executeSyncLyrics() {
+      const rawText = textarea.value.trim();
+      if (!rawText) {
+        showToast('Pega tu letra o carga un archivo primero');
+        return;
+      }
+
+      const btn = document.getElementById('btn-sync-lyrics');
+      const spinner = document.getElementById('sync-spinner');
+      const icon = document.getElementById('sync-icon');
+      const text = document.getElementById('sync-btn-text');
+
+      spinner.classList.remove('hidden');
+      icon.classList.add('hidden');
+      text.textContent = 'Alineando fonemas y marcas de tiempo...';
+      btn.disabled = true;
+
+      try {
+        const payload = {
+          task: 'align_and_word_time',
+          lyrics: rawText,
+          trackMeta: {
+            title: currentProject.title,
+            duration: currentProject.duration || nativeAudio.duration || 180,
+            bpm: 120
+          },
+          vocalOnsets: detectedVocalOnsets,
+          vocalPhrases: detectedVocalPhrases,
+          vocalStart: detectedVocalStart,
+          vocalEnd: detectedVocalEnd
+        };
+
+        const res = await fetch('/api/ai-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const json = await res.json();
+
+        if (json.data && json.data.lines && json.data.lines.length > 0) {
+          currentProject.lines = json.data.lines;
+
+          if (!currentProject.duration || currentProject.duration === 0) {
+            currentProject.duration = Math.ceil(json.data.lines[json.data.lines.length - 1].endTime + 4);
+          }
+
+          if (userCredits >= 50) {
+            userCredits -= 50;
+            document.getElementById('credits-display').textContent = `${userCredits} Credits`;
+          }
+
+          renderLyricsEditor();
+          updateTimeDisplays();
+          drawWaveform();
+
+          showToast(`¡${json.data.lines.length} versos alineados con tiempos exactos!`);
+
+          document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
+        } else {
+          showToast('No se pudieron procesar las marcas de tiempo');
+        }
+      } catch (err) {
+        console.error('Error al sincronizar:', err);
+        showToast('Error al conectar con el servidor de sincronización');
+      } finally {
+        spinner.classList.add('hidden');
+        icon.classList.remove('hidden');
+        text.textContent = 'Sync my lyrics';
+        btn.disabled = false;
+      }
+    }
+
+    function scrollToSyncSection() {
+      document.getElementById('sync-input-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // --- ACORDEON FAQ ---
+    function toggleFaq(num) {
+      const content = document.getElementById(`faq-content-${num}`);
+      const icon = document.getElementById(`faq-icon-${num}`);
+      const isHidden = content.classList.contains('hidden');
+
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById(`faq-content-${i}`)?.classList.add('hidden');
+        document.getElementById(`faq-icon-${i}`)?.classList.remove('rotate-180');
+      }
+
+      if (isHidden) {
+        content.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+      }
+    }
+
+    // --- INICIALIZACION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      renderLyricsEditor();
+      updateTimeDisplays();
+      drawWaveform();
+      updateTextCounters();
+    });
+
+    window.addEventListener('resize', () => {
+      drawWaveform();
+    });
+  </script>
+</body>
+</html>

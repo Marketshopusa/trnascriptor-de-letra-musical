@@ -1,0 +1,6 @@
+{
+  "name": "Studio Synchrony",
+  "description": "Professional audio intelligence workstation for real-time LRC synchronization, word-level karaoke timing, stem inspection, and millisecond timeline alignment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

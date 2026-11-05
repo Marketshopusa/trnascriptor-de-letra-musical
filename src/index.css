@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-surface-base: #09090B;
+  --color-slate-surface: #0E0E12;
+  --color-slate-panel: #14141A;
+  --color-slate-element: #1E1E26;
+  --color-border-subtle: #272730;
+  --color-border-active: #3F3F4E;
+  --color-text-muted: #71717A;
+  --color-text-secondary: #A1A1AA;
+  --color-text-primary: #F4F4F5;
+  --color-text-bright: #FFFFFF;
+  
+  --color-brand-primary: #6366F1;
+  --color-brand-secondary: #8B5CF6;
+  --color-brand-cyan: #06B6D4;
+
+  --color-waveform-bg: #121218;
+  --color-waveform-unplayed: #312E81;
+  --color-waveform-played: #818CF8;
+  --color-waveform-playhead: #F43F5E;
+  --color-error-destructive: #EF4444;
+  --color-success-sync: #10B981;
+}
+
+/* Custom DAW scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0E0E12;
+}
+::-webkit-scrollbar-thumb {
+  background: #272730;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3F3F4E;
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow: 0 0 15px -2px rgba(99, 102, 241, 0.4);
+}
+.glow-secondary {
+  box-shadow: 0 0 15px -2px rgba(139, 92, 246, 0.4);
+}
+.glow-cyan {
+  box-shadow: 0 0 12px -2px rgba(6, 182, 212, 0.45);
+}
+
+/* Subtle border glow */
+.border-glow-primary {
+  border-color: #6366F1;
+  box-shadow: inset 0 0 0 1px #6366F1, 0 0 12px -2px rgba(99, 102, 241, 0.3);
+}
+
+/* Tabular figures for timecode precision */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+}
