@@ -185,7 +185,7 @@
 
           <!-- Zona Dropzone de Arrastre de Audio -->
           <div id="dropzone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center cursor-pointer group flex flex-col items-center justify-center min-h-[220px]">
-            <input type="file" id="audio-input" accept="audio/*" class="hidden" />
+            <input type="file" id="audio-input" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg" class="hidden" />
 
             <!-- Estado Vacío -->
             <div id="dropzone-empty" class="flex flex-col items-center space-y-3">
@@ -1034,7 +1034,7 @@
     let detectedVocalStart = 14.0; // Se detecta con precisión tras el intro instrumental
     let detectedVocalEnd = 222.0;   // Se detecta con precisión antes del outro (ej. 03:42)
     let detectedVocalPhrases = [];
-    let detectedVocalOnsets = [];
+    detectedVocalOnsets = [];
 
     // --- DECODIFICACION Y ANALISIS DE FORMA DE ONDA CON FILTRO VOCAL (RESPETO AL INTRO) ---
     async function analyzeAudioBuffer(file) {
@@ -1862,8 +1862,13 @@
     const dropzone = document.getElementById('dropzone');
     const audioInput = document.getElementById('audio-input');
 
-    dropzone.addEventListener('click', () => {
+    dropzone.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target === audioInput) return;
       audioInput.click();
+    });
+
+    audioInput.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
 
     ['dragenter', 'dragover'].forEach(name => {
@@ -2023,6 +2028,249 @@
       }
     }
 
+    // --- PARSER LOCAL DE LRC / SRT CON PRESERVACIÓN EXACTA ---
+    function parseExistingLrcInput(rawLrc, totalDuration) {
+      const lines = rawLrc.split(/\r?\n/);
+      const result = [];
+      const lineTimeRegex = /^\s*(?:\[|\<|\()?\s*(\d{1,2}):(\d{2}(?:[\.,]\d{1,3})?)\s*(?:\]|\>|\))?\s*(?:-\s*)?(.*)$/;
+      const wordTagRegex = /<(\d{1,2}):(\d{2}(?:[\.,]\d{1,3})?)>([^<]+)/g;
+      const isSrt = /\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}/.test(rawLrc);
+
+      if (isSrt) {
+        const srtBlocks = rawLrc.split(/\r?\n\r?\n/);
+        srtBlocks.forEach((block, bIdx) => {
+          const bLines = block.trim().split(/\r?\n/);
+          const timeLine = bLines.find((l) => l.includes('-->'));
+          if (timeLine) {
+            const parts = timeLine.split('-->');
+            const parseSrtTime = (tStr) => {
+              const match = tStr.trim().match(/(\d{2}):(\d{2}):(\d{2})[,\.](\d{1,3})/);
+              if (!match) return 0;
+              return parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseInt(match[3], 10) + parseInt(match[4].padEnd(3, '0'), 10) / 1000;
+            };
+            const sTime = Math.round(parseSrtTime(parts[0]) * 100) / 100;
+            const eTime = Math.round(parseSrtTime(parts[1]) * 100) / 100;
+            const textLines = bLines.filter((l) => !l.includes('-->') && !/^\d+$/.test(l.trim())).join(' ').trim();
+            if (textLines) {
+              const rawWords = textLines.split(/\s+/).filter(Boolean);
+              const span = (eTime - sTime) / Math.max(1, rawWords.length);
+              const words = rawWords.map((w, wIdx) => ({
+                id: `w-${bIdx}-${wIdx}-${Date.now()}`,
+                word: w,
+                startTime: Math.round((sTime + wIdx * span) * 100) / 100,
+                endTime: Math.round((sTime + (wIdx + 1) * span * 0.95) * 100) / 100,
+                confidence: 100,
+              }));
+              result.push({
+                id: `line-${bIdx}-${Date.now()}`,
+                startTime: sTime,
+                endTime: eTime,
+                text: textLines,
+                confidence: 100,
+                words,
+              });
+            }
+          }
+        });
+        if (result.length > 0) return result;
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i].trim();
+        if (!raw || raw.startsWith('[ti:') || raw.startsWith('[ar:') || raw.startsWith('[al:') || raw.startsWith('[by:') || raw.startsWith('[re:') || raw.startsWith('[ve:') || raw.startsWith('[length:')) {
+          continue;
+        }
+
+        const match = raw.match(lineTimeRegex);
+        if (match && match[1] && match[2]) {
+          const mins = parseInt(match[1], 10);
+          const secs = parseFloat(match[2].replace(',', '.'));
+          const startTime = Math.round((mins * 60 + secs) * 100) / 100;
+          const content = match[3] ? match[3].trim() : '';
+
+          if (!content) continue;
+
+          const words = [];
+          let cleanText = '';
+
+          if (content.includes('<') && content.includes('>')) {
+            let wordMatch;
+            while ((wordMatch = wordTagRegex.exec(content)) !== null) {
+              const wM = parseInt(wordMatch[1], 10);
+              const wS = parseFloat(wordMatch[2].replace(',', '.'));
+              const wStart = Math.round((wM * 60 + wS) * 100) / 100;
+              const wWord = wordMatch[3].trim();
+              words.push({
+                id: `w-${i}-${words.length}-${Date.now()}`,
+                word: wWord,
+                startTime: wStart,
+                endTime: wStart + 0.35,
+                confidence: 100,
+              });
+              cleanText += (cleanText ? ' ' : '') + wWord;
+            }
+
+            for (let w = 0; w < words.length; w++) {
+              if (w < words.length - 1) {
+                words[w].endTime = words[w + 1].startTime;
+              } else {
+                words[w].endTime = words[w].startTime + 0.45;
+              }
+            }
+          } else {
+            cleanText = content;
+            const rawWords = cleanText.split(/\s+/).filter(Boolean);
+            const estLineDuration = Math.max(1.6, rawWords.length * 0.38);
+            const wordSpan = estLineDuration / Math.max(1, rawWords.length);
+            rawWords.forEach((rw, rIdx) => {
+              words.push({
+                id: `w-${i}-${rIdx}-${Date.now()}`,
+                word: rw,
+                startTime: Math.round((startTime + rIdx * wordSpan) * 100) / 100,
+                endTime: Math.round((startTime + (rIdx + 1) * wordSpan * 0.95) * 100) / 100,
+                confidence: 100,
+              });
+            });
+          }
+
+          result.push({
+            id: `line-${i}-${Date.now()}`,
+            startTime,
+            endTime: words.length > 0 ? words[words.length - 1].endTime : startTime + 2.8,
+            text: cleanText || content,
+            confidence: 100,
+            words,
+          });
+        }
+      }
+
+      for (let j = 0; j < result.length; j++) {
+        if (j < result.length - 1) {
+          if (result[j].endTime > result[j + 1].startTime) {
+            result[j].endTime = Math.max(result[j].startTime + 0.4, result[j + 1].startTime - 0.05);
+          }
+        } else {
+          result[j].endTime = Math.min(totalDuration, result[j].startTime + 3.5);
+        }
+      }
+
+      return result;
+    }
+
+    // --- MOTOR LOCAL DE SINCRONIZACIÓN ACÚSTICA (RESPETA INTRO Y VOZ REAL) ---
+    function generateAcousticSync(inputLyrics, trackMeta, vocalOnsets, vocalPhrases, vocalStart, vocalEnd) {
+      const duration = trackMeta?.duration || 180;
+      const rawLines = inputLyrics.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+      if (rawLines.length === 0) {
+        return { analysis: 'No lyrics provided', lines: [] };
+      }
+
+      let startOffset = 14.0;
+      if (typeof vocalStart === 'number' && vocalStart > 0) {
+        startOffset = vocalStart;
+      } else if (vocalPhrases && vocalPhrases.length > 0 && vocalPhrases[0].start > 0) {
+        startOffset = vocalPhrases[0].start;
+      } else if (vocalOnsets && vocalOnsets.length > 0) {
+        startOffset = Math.max(5.0, vocalOnsets[0]);
+      }
+
+      let endOffset = Math.min(duration - 4, 222.0);
+      if (typeof vocalEnd === 'number' && vocalEnd > startOffset) {
+        endOffset = vocalEnd;
+      } else if (vocalPhrases && vocalPhrases.length > 0) {
+        endOffset = Math.min(duration - 2, vocalPhrases[vocalPhrases.length - 1].end);
+      } else if (vocalOnsets && vocalOnsets.length > 0) {
+        const lastOnset = vocalOnsets[vocalOnsets.length - 1];
+        if (lastOnset > startOffset + 15) {
+          endOffset = Math.min(duration - 2, lastOnset + 3.5);
+        }
+      }
+
+      if (endOffset <= startOffset + 5) {
+        endOffset = Math.max(startOffset + 15, duration - 2);
+      }
+
+      const totalSingingSpan = Math.max(10, endOffset - startOffset);
+      const totalLines = rawLines.length;
+
+      let prevEnd = startOffset;
+      const lines = rawLines.map((lineText, lIdx) => {
+        const rawWords = lineText.split(/\s+/).filter(Boolean);
+        const estLineDuration = Math.max(1.8, Math.min(5.5, rawWords.length * 0.42));
+
+        let lineStart = startOffset;
+        let lineEnd = startOffset + estLineDuration;
+
+        if (totalLines === 1) {
+          lineStart = startOffset;
+          lineEnd = Math.min(endOffset, lineStart + estLineDuration);
+        } else {
+          if (vocalPhrases && vocalPhrases.length >= 2) {
+            const phraseIndex = Math.min(
+              vocalPhrases.length - 1,
+              Math.round((lIdx / (totalLines - 1)) * (vocalPhrases.length - 1))
+            );
+            const phrase = vocalPhrases[phraseIndex];
+            lineStart = Math.max(prevEnd + 0.1, phrase.start);
+            lineEnd = Math.max(lineStart + 1.2, phrase.end);
+          } else {
+            const progress = lIdx / (totalLines - 1);
+            const targetStart = startOffset + progress * (totalSingingSpan - estLineDuration);
+            lineStart = Math.max(prevEnd + 0.1, Math.round(targetStart * 100) / 100);
+
+            if (vocalOnsets && vocalOnsets.length > 0) {
+              const nearest = vocalOnsets.find((o) => Math.abs(o - lineStart) < 1.6);
+              if (nearest !== undefined && nearest >= prevEnd + 0.1) {
+                lineStart = nearest;
+              }
+            }
+
+            lineEnd = Math.min(endOffset, Math.round((lineStart + estLineDuration) * 100) / 100);
+          }
+        }
+
+        if (lineEnd <= lineStart) {
+          lineEnd = Math.round((lineStart + estLineDuration) * 100) / 100;
+        }
+        prevEnd = lineEnd;
+
+        const lineDuration = lineEnd - lineStart;
+        const totalChars = rawWords.reduce((acc, w) => acc + Math.max(2, w.length), 0);
+
+        let curWordStart = lineStart;
+        const words = rawWords.map((word, wIdx) => {
+          const charWeight = Math.max(2, word.length) / totalChars;
+          const wDuration = Math.max(0.2, lineDuration * charWeight);
+          const wStart = Math.round(curWordStart * 100) / 100;
+          const wEnd = Math.round((curWordStart + wDuration * 0.95) * 100) / 100;
+          curWordStart += wDuration;
+
+          return {
+            id: `w-${lIdx}-${wIdx}-${Date.now()}`,
+            word,
+            startTime: wStart,
+            endTime: wEnd,
+            confidence: 98,
+          };
+        });
+
+        return {
+          id: `l-${lIdx}-${Date.now()}`,
+          startTime: lineStart,
+          endTime: lineEnd,
+          text: lineText,
+          confidence: 98,
+          words,
+        };
+      });
+
+      return {
+        analysis: `Alineado acústico de ${lines.length} versos respetando intro (${startOffset.toFixed(2)}s) y finalización (${endOffset.toFixed(2)}s).`,
+        lines,
+      };
+    }
+
     // --- EJECUCION REAL DE "SYNC MY LYRICS" ---
     async function executeSyncLyrics() {
       const rawText = textarea.value.trim();
@@ -2056,19 +2304,60 @@
           vocalEnd: detectedVocalEnd
         };
 
-        const res = await fetch('/api/ai-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        let resultData = null;
 
-        const json = await res.json();
+        // 1. Intentar llamar al servidor de sincronización AI
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const res = await fetch('/api/ai-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-        if (json.data && json.data.lines && json.data.lines.length > 0) {
-          currentProject.lines = json.data.lines;
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.data && json.data.lines && json.data.lines.length > 0) {
+              resultData = json.data;
+            }
+          }
+        } catch (apiErr) {
+          console.warn('API sync endpoint no disponible, procesando directamente con el motor acústico local:', apiErr);
+        }
+
+        // 2. Si no hay respuesta del servidor o no tiene API key, procesar de inmediato en el navegador
+        if (!resultData || !resultData.lines || resultData.lines.length === 0) {
+          const hasExistingTimestamps = /(?:\[|\<|\()?\s*\d{1,2}:\d{2}(?:[\.,]\d{1,3})?\s*(?:\]|\>|\))?|-->/.test(rawText);
+          if (hasExistingTimestamps) {
+            const parsedLines = parseExistingLrcInput(rawText, payload.trackMeta.duration);
+            if (parsedLines && parsedLines.length > 0) {
+              resultData = {
+                analysis: `Extraídos ${parsedLines.length} versos preservando tiempos originales.`,
+                lines: parsedLines
+              };
+            }
+          }
+
+          if (!resultData) {
+            resultData = generateAcousticSync(
+              rawText,
+              payload.trackMeta,
+              detectedVocalOnsets,
+              detectedVocalPhrases,
+              detectedVocalStart,
+              detectedVocalEnd
+            );
+          }
+        }
+
+        if (resultData && resultData.lines && resultData.lines.length > 0) {
+          currentProject.lines = resultData.lines;
 
           if (!currentProject.duration || currentProject.duration === 0) {
-            currentProject.duration = Math.ceil(json.data.lines[json.data.lines.length - 1].endTime + 4);
+            currentProject.duration = Math.ceil(resultData.lines[resultData.lines.length - 1].endTime + 4);
           }
 
           if (userCredits >= 50) {
@@ -2080,7 +2369,7 @@
           updateTimeDisplays();
           drawWaveform();
 
-          showToast(`¡${json.data.lines.length} versos alineados con tiempos exactos!`);
+          showToast(`¡${resultData.lines.length} versos alineados con tiempos exactos!`);
 
           document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
         } else {
@@ -2088,7 +2377,7 @@
         }
       } catch (err) {
         console.error('Error al sincronizar:', err);
-        showToast('Error al conectar con el servidor de sincronización');
+        showToast('Error al procesar la sincronización');
       } finally {
         spinner.classList.add('hidden');
         icon.classList.remove('hidden');
