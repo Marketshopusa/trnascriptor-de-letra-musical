@@ -193,22 +193,22 @@
           </div>
 
           <!-- Zona Dropzone de Arrastre de Audio -->
-          <div id="dropzone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center cursor-pointer group flex flex-col items-center justify-center min-h-[220px]">
-            <input type="file" id="audio-input" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg" class="hidden" />
+          <div id="dropzone" onclick="triggerAudioUpload(event)" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-50/80 rounded-xl p-8 transition-all text-center cursor-pointer group flex flex-col items-center justify-center min-h-[220px] select-none">
+            <input type="file" id="audio-input" accept=".mp3,.wav,.flac,.m4a,.ogg,audio/*" class="hidden" onchange="handleAudioInputChange(event)" />
 
             <!-- Estado Vacío -->
             <div id="dropzone-empty" class="flex flex-col items-center space-y-3">
-              <div class="w-14 h-14 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center transition-transform group-hover:scale-110 shadow-md">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button type="button" onclick="triggerAudioUpload(event)" class="w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center justify-center transition-transform group-hover:scale-110 shadow-md cursor-pointer border-none outline-none">
+                <svg class="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
-              </div>
+              </button>
               <div>
                 <p class="text-sm font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
                   Arrastra tu archivo de audio aquí
                 </p>
                 <p class="text-xs text-[#64748b] mt-1">
-                  o <span class="text-amber-600 font-semibold underline underline-offset-2">explora desde tu ordenador</span>
+                  o <button type="button" onclick="triggerAudioUpload(event)" class="text-amber-600 font-semibold underline underline-offset-2 hover:text-amber-800 cursor-pointer bg-transparent border-none p-0">explora desde tu ordenador</button>
                 </p>
               </div>
               <p class="text-[11px] font-mono text-[#94a3b8]">
@@ -1973,46 +1973,56 @@
       });
     }
 
-    // --- CARGA DE AUDIO Y DROPZONE ---
-    const dropzone = document.getElementById('dropzone');
-    const audioInput = document.getElementById('audio-input');
-
-    dropzone.addEventListener('click', (e) => {
-      if (e.target.closest('button') || e.target === audioInput) return;
-      audioInput.click();
-    });
-
-    audioInput.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-
-    ['dragenter', 'dragover'].forEach(name => {
-      dropzone.addEventListener(name, (e) => {
-        e.preventDefault();
-        dropzone.classList.add('border-amber-500', 'bg-amber-100/50');
-      });
-    });
-
-    ['dragleave', 'drop'].forEach(name => {
-      dropzone.addEventListener(name, (e) => {
-        e.preventDefault();
-        dropzone.classList.remove('border-amber-500', 'bg-amber-100/50');
-      });
-    });
-
-    dropzone.addEventListener('drop', (e) => {
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('audio/')) {
-        handleFileSelection(file);
-      } else {
-        showToast('Sube un archivo de audio (MP3, WAV, FLAC, M4A, OGG)');
+    // --- CARGA DE AUDIO Y DROPZONE (DISPARO DIRECTO NATIVO) ---
+    function triggerAudioUpload(e) {
+      if (e) {
+        if (e.target && e.target.closest('#dropzone-loaded')) return;
+        e.stopPropagation();
       }
-    });
+      const input = document.getElementById('audio-input');
+      if (input) {
+        input.click();
+      }
+    }
 
-    audioInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleFileSelection(file);
-    });
+    function handleAudioInputChange(e) {
+      const file = e.target && e.target.files && e.target.files[0];
+      if (file) {
+        handleFileSelection(file);
+      }
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
+
+    const dropzone = document.getElementById('dropzone');
+
+    if (dropzone) {
+      ['dragenter', 'dragover'].forEach(name => {
+        dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.add('border-amber-500', 'bg-amber-100/50');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(name => {
+        dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.remove('border-amber-500', 'bg-amber-100/50');
+        });
+      });
+
+      dropzone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) {
+          handleFileSelection(file);
+        } else {
+          showToast('Sube un archivo de audio (MP3, WAV, FLAC, M4A, OGG)');
+        }
+      });
+    }
 
     function handleFileSelection(file) {
       uploadedFile = file;
