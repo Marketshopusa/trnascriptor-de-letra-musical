@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
+export const maxDuration = 60;
+
 export const config = {
   api: {
     bodyParser: {
@@ -167,6 +169,7 @@ Transcribe and word-align the song lyrics from the singing vocals.`;
         ]
       }
     ],
+    max_tokens: 3072,
     temperature: 0.1
   };
 

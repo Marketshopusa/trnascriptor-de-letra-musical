@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
+export const maxDuration = 60;
+
 export const config = {
   api: {
     bodyParser: {
@@ -18,7 +20,36 @@ function getAudioFormat(mimeType: string = ''): string {
   return 'mp3';
 }
 
-function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
+function attachVerseNewlines(words: any[], lyrics: string): any[] {
+  if (!words || words.length === 0 || !lyrics) return words;
+  const userLines = lyrics.trim().split('\n').map(l => l.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, '').trim()).filter(l => l.length > 0);
+  if (userLines.length === 0) return words;
+
+  const lineWordCounts = userLines.map(l => l.split(/\s+/).filter(Boolean).length);
+  let wordPointer = 0;
+
+  for (let l = 0; l < lineWordCounts.length; l++) {
+    const count = lineWordCounts[l];
+    const targetIdx = wordPointer + count - 1;
+    if (targetIdx < words.length) {
+      const wObj = words[targetIdx];
+      if (wObj && typeof wObj.word === 'string') {
+        const trimmed = wObj.word.trim();
+        wObj.word = trimmed + '\n';
+      }
+    }
+    wordPointer += count;
+  }
+
+  // Ensure last word has \n
+  if (words.length > 0 && typeof words[words.length - 1].word === 'string') {
+    words[words.length - 1].word = words[words.length - 1].word.trim() + '\n';
+  }
+
+  return words;
+}
+
+function cleanAndParseJSON(raw: string, fallbackLyrics: string = '', vocalStart: number = 0): any {
   let text = (raw || '').trim();
   // Strip markdown ```json ... ``` blocks
   if (text.startsWith('```')) {
@@ -28,7 +59,10 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
   // 1. Direct parse attempt
   try {
     const res = JSON.parse(text);
-    if (res && Array.isArray(res.words) && res.words.length > 0) return res;
+    if (res && Array.isArray(res.words) && res.words.length > 0) {
+      res.words = attachVerseNewlines(res.words, fallbackLyrics);
+      return res;
+    }
   } catch (e) {}
 
   // 2. Substring between outermost { and }
@@ -38,7 +72,10 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
     const sub = text.substring(start, end + 1);
     try {
       const res = JSON.parse(sub);
-      if (res && Array.isArray(res.words) && res.words.length > 0) return res;
+      if (res && Array.isArray(res.words) && res.words.length > 0) {
+        res.words = attachVerseNewlines(res.words, fallbackLyrics);
+        return res;
+      }
     } catch (e) {}
 
     // 3. Repair missing commas between properties (e.g. "language": "es" \n "words": [...])
@@ -47,7 +84,10 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
       .replace(/,\s*([\]}])/g, '$1');
     try {
       const res = JSON.parse(repaired);
-      if (res && Array.isArray(res.words) && res.words.length > 0) return res;
+      if (res && Array.isArray(res.words) && res.words.length > 0) {
+        res.words = attachVerseNewlines(res.words, fallbackLyrics);
+        return res;
+      }
     } catch (e) {}
   }
 
@@ -71,14 +111,14 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
   }
 
   if (words.length > 0) {
-    return { language: 'es', words };
+    return { language: 'es', words: attachVerseNewlines(words, fallbackLyrics) };
   }
 
   // 5. Ultimate Fallback: Synthesize from user lyrics if present
   if (fallbackLyrics && fallbackLyrics.trim().length > 0) {
     const lines = fallbackLyrics.trim().split('\n');
     const synthWords: any[] = [];
-    let curTime = 14.10; // Start singing after intro
+    let curTime = (typeof vocalStart === 'number' && vocalStart > 0) ? vocalStart : 0;
 
     lines.forEach((line) => {
       const pureLine = line.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, '').trim();
@@ -111,7 +151,7 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
   throw new Error('No se pudieron extraer fonemas vocales del audio ni estructurar las marcas de tiempo.');
 }
 
-async function alignWithNvidia(apiKey: string, audioBase64: string, format: string, lyrics: string, isAlignOnly: boolean) {
+async function alignWithNvidia(apiKey: string, audioBase64: string, format: string, lyrics: string, isAlignOnly: boolean, vocalStart: number = 0) {
   const systemPrompt = isAlignOnly
     ? `You are an expert audio-to-lyrics forced alignment intelligence (identical to Lacuna.fm's AI forced aligner).
 Your goal is to accurately match the provided lyrics to the audible human voice in the song.
@@ -168,6 +208,7 @@ Transcribe and word-align the song lyrics from the singing vocals.`;
         ]
       }
     ],
+    max_tokens: 3072,
     temperature: 0.1
   };
 
@@ -190,15 +231,15 @@ Transcribe and word-align the song lyrics from the singing vocals.`;
   let rawContent = (choice?.content || '').trim();
 
   try {
-    return cleanAndParseJSON(rawContent, lyrics);
+    return cleanAndParseJSON(rawContent, lyrics, vocalStart);
   } catch (err1) {
     if (choice?.reasoning_content) {
       try {
-        return cleanAndParseJSON(choice.reasoning_content, lyrics);
+        return cleanAndParseJSON(choice.reasoning_content, lyrics, vocalStart);
       } catch (err2) {}
     }
     // Fallback using lyrics
-    return cleanAndParseJSON('', lyrics);
+    return cleanAndParseJSON('', lyrics, vocalStart);
   }
 }
 
@@ -309,7 +350,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { audioBase64, audioMimeType, lyrics, mode, userApiKey } = req.body || {};
+    const { audioBase64, audioMimeType, lyrics, mode, userApiKey, vocalStart } = req.body || {};
 
     if (!audioBase64) {
       return res.status(400).json({
@@ -339,7 +380,7 @@ export default async function handler(req: any, res: any) {
       const activeNvidiaKey = (customKey.startsWith('nvapi-')) ? customKey : nvidiaKey;
       providerUsed = 'nvidia';
       try {
-        parsedResult = await alignWithNvidia(activeNvidiaKey, audioBase64, format, lyrics || '', isAlignOnly);
+        parsedResult = await alignWithNvidia(activeNvidiaKey, audioBase64, format, lyrics || '', isAlignOnly, Number(vocalStart) || 0);
       } catch (nvidiaErr: any) {
         console.warn('NVIDIA NIM attempt failed, checking fallback:', nvidiaErr?.message);
         if (geminiKey && geminiKey.startsWith('AIzaSy')) {
@@ -347,7 +388,7 @@ export default async function handler(req: any, res: any) {
           parsedResult = await alignWithGemini(geminiKey, audioBase64, audioMimeType, lyrics || '', isAlignOnly);
         } else {
           // Fallback to robust parsing
-          parsedResult = cleanAndParseJSON('', lyrics || '');
+          parsedResult = cleanAndParseJSON('', lyrics || '', Number(vocalStart) || 0);
         }
       }
     }

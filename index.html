@@ -964,11 +964,9 @@
       }
 
       if (nativeAudio.paused) {
-        // Si hay letra en el textarea pero aún no se ha sincronizado, sincronizarla automáticamente
+        // Si hay letra en el textarea y aún no se ha colocado en el editor, estructurarla de inmediato
         if (currentProject.lines.length === 0 && textarea && textarea.value.trim().length > 0) {
-          showToast('Sincronizando letra con el audio...');
-          executeSyncLyrics();
-          return;
+          autoAlignLyricsFromAudio(textarea.value.trim());
         }
 
         nativeAudio.play().then(() => {
@@ -1311,6 +1309,11 @@
 
         drawWaveform();
         showToast(`Audio listo: Voz detectada desde ${formatTimeLrc(detectedVocalStart)} hasta ${formatTimeLrc(detectedVocalEnd)}`);
+
+        // Si ya hay texto en el textarea, auto-alinear de inmediato a las marcas acústicas detectadas
+        if (textarea && textarea.value.trim().length > 0) {
+          autoAlignLyricsFromAudio(textarea.value.trim());
+        }
       } catch (err) {
         console.warn('Decodificación de buffer:', err);
       }
@@ -2082,30 +2085,116 @@
 
     // --- CONTADORES Y CARGA DE LIRICA ---
     const textarea = document.getElementById('lyrics-textarea');
-    textarea.addEventListener('input', () => {
+
+    function onLyricsChanged() {
       updateTextCounters();
       const val = textarea.value.trim();
-      // Si el usuario pega texto que ya tiene marcas [mm:ss.xx], renderizar al instante
-      if (/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/.test(val)) {
-        const parsedLines = parseLrcToLines(val);
-        if (parsedLines.length > 0) {
-          currentProject.lines = parsedLines;
-          currentProject.duration = Math.ceil(parsedLines[parsedLines.length - 1].endTime + 3);
-          renderLyricsEditor();
-          updateTimeDisplays();
-          drawWaveform();
-          showToast(`Se cargaron ${parsedLines.length} versos con tiempos [mm:ss.xx] directamente al editor.`);
-        }
+      if (val.length > 0) {
+        autoAlignLyricsFromAudio(val);
       }
+    }
+
+    ['input', 'change', 'paste', 'keyup'].forEach(evt => {
+      textarea.addEventListener(evt, () => {
+        setTimeout(onLyricsChanged, 20);
+      });
     });
 
     function updateTextCounters() {
-      const text = textarea.value.trim();
+      const text = textarea ? textarea.value.trim() : '';
       const lines = text ? text.split('\n').filter(l => l.trim().length > 0) : [];
       const words = text ? text.split(/\s+/).filter(w => w.length > 0) : [];
 
-      document.getElementById('lines-count').textContent = lines.length;
-      document.getElementById('words-count').textContent = words.length;
+      const linesEl = document.getElementById('lines-count');
+      const wordsEl = document.getElementById('words-count');
+      if (linesEl) linesEl.textContent = lines.length;
+      if (wordsEl) wordsEl.textContent = words.length;
+    }
+
+    // --- ALINEADOR VOCAL AUTOMÁTICO BASADO EN AUDIO REAL (100% AUTOMÁTICO) ---
+    function autoAlignLyricsFromAudio(rawText) {
+      if (!rawText || typeof rawText !== 'string') return;
+      const trimmed = rawText.trim();
+      if (trimmed.length === 0) return;
+
+      // Si ya tiene marcas de tiempo [mm:ss.xx], parsearlas directamente
+      if (/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/.test(trimmed)) {
+        const parsed = parseLrcToLines(trimmed);
+        if (parsed.length > 0) {
+          currentProject.lines = parsed;
+          currentProject.duration = Math.ceil(parsed[parsed.length - 1].endTime + 3);
+          renderLyricsEditor();
+          updateTimeDisplays();
+          drawWaveform();
+          return;
+        }
+      }
+
+      const rawLines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (rawLines.length === 0) return;
+
+      // Inicio real de la voz tras el intro instrumental detectado por Web Audio
+      const vocalStart = (typeof detectedVocalStart === 'number' && detectedVocalStart > 0)
+        ? detectedVocalStart
+        : (nativeAudio.currentTime > 0 ? nativeAudio.currentTime : 14.10);
+
+      const dur = (currentProject.duration && currentProject.duration > vocalStart + 10)
+        ? currentProject.duration
+        : (nativeAudio.duration && isFinite(nativeAudio.duration) && nativeAudio.duration > vocalStart + 10 ? nativeAudio.duration : vocalStart + rawLines.length * 6);
+
+      const vocalEnd = (typeof detectedVocalEnd === 'number' && detectedVocalEnd > vocalStart + 10)
+        ? detectedVocalEnd
+        : Math.max(vocalStart + 20, dur - 4);
+
+      const span = Math.max(10, vocalEnd - vocalStart);
+      const timePerLine = span / rawLines.length;
+
+      const lines = [];
+      let clock = vocalStart;
+
+      rawLines.forEach((lineText, lIdx) => {
+        let lineStart, lineEnd;
+        if (detectedVocalPhrases && detectedVocalPhrases[lIdx]) {
+          lineStart = Math.max(0, detectedVocalPhrases[lIdx].start);
+          lineEnd = Math.max(lineStart + 1.2, detectedVocalPhrases[lIdx].end);
+          clock = lineEnd;
+        } else {
+          lineStart = Math.round(clock * 100) / 100;
+          const tokens = lineText.split(/\s+/).filter(Boolean);
+          const estLineDur = Math.min(timePerLine * 0.85, Math.max(1.8, tokens.length * 0.42));
+          lineEnd = Math.round((lineStart + estLineDur) * 100) / 100;
+          clock = lineEnd + Math.max(0.6, (timePerLine - estLineDur));
+        }
+
+        const tokens = lineText.split(/\s+/).filter(Boolean);
+        const lineDur = Math.max(0.8, lineEnd - lineStart);
+        const timePerWord = lineDur / Math.max(1, tokens.length);
+
+        const words = tokens.map((tok, wIdx) => {
+          return {
+            id: `w-${lIdx}-${wIdx}-${Date.now()}`,
+            word: tok,
+            startTime: Math.round((lineStart + wIdx * timePerWord) * 100) / 100,
+            endTime: Math.round((lineStart + (wIdx + 0.92) * timePerWord) * 100) / 100,
+            confidence: 98
+          };
+        });
+
+        lines.push({
+          id: `l-${lIdx}-${Date.now()}`,
+          startTime: lineStart,
+          endTime: lineEnd,
+          text: lineText,
+          confidence: 98,
+          words: words
+        });
+      });
+
+      currentProject.lines = lines;
+      if (dur > currentProject.duration) currentProject.duration = Math.ceil(dur);
+      renderLyricsEditor();
+      updateTimeDisplays();
+      drawWaveform();
     }
 
     // --- PARSEADOR PROFESIONAL DE FORMATO .LRC (ESTÁNDAR Y ENHANCED) ---
@@ -2422,6 +2511,52 @@
 
     // --- PROCESAMIENTO DE RESPUESTA DE IA ESTILO LACUNA.FM (WORDS.JSON) ---
     function processLacunaWords(words) {
+      if (!words || !Array.isArray(words) || words.length === 0) return [];
+
+      const rawText = (textarea && textarea.value) ? textarea.value.trim() : '';
+      const userLines = rawText.split('\n').map(l => l.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, '').trim()).filter(l => l.length > 0);
+
+      // Si tenemos los versos originales del usuario, distribuir las palabras palabra por palabra respetando sus versos exactos
+      if (userLines.length > 0) {
+        const lineWordCounts = userLines.map(l => l.split(/\s+/).filter(Boolean).length);
+        const lines = [];
+        let wordPointer = 0;
+
+        for (let lIdx = 0; lIdx < userLines.length; lIdx++) {
+          const count = lineWordCounts[lIdx];
+          const slice = words.slice(wordPointer, wordPointer + count);
+          if (slice.length === 0) break;
+
+          const currentLineWords = slice.map((w, wIdx) => {
+            const cleanWord = (w.word || '').replace(/[\r\n]/g, '').trim();
+            return {
+              id: `w-${lIdx}-${wIdx}-${Date.now()}`,
+              word: cleanWord,
+              startTime: Math.round(Number(w.startS) * 100) / 100,
+              endTime: Math.round(Number(w.endS) * 100) / 100,
+              confidence: Math.round((Number(w.palign) || 1.0) * 100)
+            };
+          });
+
+          const lStart = currentLineWords[0].startTime;
+          const lEnd = currentLineWords[currentLineWords.length - 1].endTime;
+
+          lines.push({
+            id: `l-${lIdx}-${Date.now()}`,
+            startTime: lStart,
+            endTime: lEnd,
+            text: userLines[lIdx],
+            confidence: 99,
+            words: currentLineWords
+          });
+
+          wordPointer += count;
+        }
+
+        if (lines.length > 0) return lines;
+      }
+
+      // Fallback: segmentación estándar por salto de línea \n
       const lines = [];
       let currentLineWords = [];
       let lineIdx = 0;
@@ -2516,6 +2651,11 @@
       text.textContent = 'Codificando audio para IA...';
       btn.disabled = true;
 
+      // Pre-cargar estructura de versos de inmediato para que el editor nunca quede vacío
+      if (rawText.length > 0) {
+        autoAlignLyricsFromAudio(rawText);
+      }
+
       try {
         // 1. Optimizar y comprimir el audio en el navegador (evita error HTTP 413 de Vercel)
         text.textContent = 'Optimizando audio para la IA...';
@@ -2532,7 +2672,8 @@
             audioMimeType: prep.mimeType,
             lyrics: rawText,
             mode: isAlignMode ? 'ALIGN_ONLY' : 'TRANSCRIBE',
-            userApiKey: apiKey
+            userApiKey: apiKey,
+            vocalStart: detectedVocalStart || 0
           })
         });
 
