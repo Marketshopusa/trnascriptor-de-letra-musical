@@ -17,6 +17,39 @@
   <!-- Red Neuronal de Detección de Voz Humana (Silero VAD Deep Learning) -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.31/dist/bundle.min.js"></script>
+  <!-- Motor Acústico Neuronal Whisper (OpenAI Whisper WebAssembly para Alineación Acústica Real) -->
+  <script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+
+    let whisperPipelineInstance = null;
+
+    window.runWhisperASR = async function(audioFloat32Array, language = 'spanish', onProgress = null) {
+      if (!whisperPipelineInstance) {
+        if (onProgress) onProgress('Iniciando red neuronal Whisper...');
+        whisperPipelineInstance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+          progress_callback: (p) => {
+            if (p.status === 'progress' && onProgress && typeof p.progress === 'number') {
+              onProgress(`Cargando modelo Whisper (${Math.round(p.progress)}%)...`);
+            }
+          }
+        });
+      }
+
+      if (onProgress) onProgress('Whisper escuchando fonemas vocales...');
+      const langParam = language === 'en' ? 'english' : (language === 'es' ? 'spanish' : undefined);
+      const result = await whisperPipelineInstance(audioFloat32Array, {
+        return_timestamps: 'word',
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        language: langParam,
+        task: 'transcribe'
+      });
+
+      return result;
+    };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -983,11 +1016,6 @@
       }
 
       if (nativeAudio.paused) {
-        // Si hay letra en el textarea y aún no se ha colocado en el editor, estructurarla de inmediato
-        if (currentProject.lines.length === 0 && textarea && textarea.value.trim().length > 0) {
-          autoAlignLyricsFromAudio(textarea.value.trim());
-        }
-
         nativeAudio.play().then(() => {
           isPlaying = true;
           updatePlayButtonUI();
@@ -1107,9 +1135,6 @@
       }
       updateVocalBoundaryInputs();
       drawWaveform();
-      if (textarea && textarea.value.trim().length > 0) {
-        autoAlignLyricsFromAudio(textarea.value.trim());
-      }
       showToast(`Inicio de voz fijado en ${formatTimeLrc(detectedVocalStart)}`);
     }
 
@@ -1120,9 +1145,6 @@
       }
       updateVocalBoundaryInputs();
       drawWaveform();
-      if (textarea && textarea.value.trim().length > 0) {
-        autoAlignLyricsFromAudio(textarea.value.trim());
-      }
       showToast(`Fin de voz fijado en ${formatTimeLrc(detectedVocalEnd)}`);
     }
 
@@ -1130,9 +1152,6 @@
       detectedVocalStart = Math.max(0, Math.round((detectedVocalStart + delta) * 10) / 10);
       updateVocalBoundaryInputs();
       drawWaveform();
-      if (textarea && textarea.value.trim().length > 0) {
-        autoAlignLyricsFromAudio(textarea.value.trim());
-      }
       showToast(`Inicio de voz ajustado a ${formatTimeLrc(detectedVocalStart)}`);
     }
 
@@ -1140,9 +1159,6 @@
       detectedVocalEnd = Math.max(detectedVocalStart + 5, Math.round((detectedVocalEnd + delta) * 10) / 10);
       updateVocalBoundaryInputs();
       drawWaveform();
-      if (textarea && textarea.value.trim().length > 0) {
-        autoAlignLyricsFromAudio(textarea.value.trim());
-      }
     }
 
     function setVocalStartFromPlayhead() {
@@ -1150,9 +1166,6 @@
       detectedVocalStart = cur;
       updateVocalBoundaryInputs();
       drawWaveform();
-      if (textarea && textarea.value.trim().length > 0) {
-        autoAlignLyricsFromAudio(textarea.value.trim());
-      }
       showToast(`📍 Inicio de voz fijado en la aguja actual: ${formatTimeLrc(detectedVocalStart)}`);
     }
 
@@ -1380,11 +1393,6 @@
 
         drawWaveform();
         showToast(`Audio listo: Voz detectada desde ${formatTimeLrc(detectedVocalStart)} hasta ${formatTimeLrc(detectedVocalEnd)}`);
-
-        // Si ya hay texto en el textarea, auto-alinear de inmediato a las marcas acústicas detectadas
-        if (textarea && textarea.value.trim().length > 0) {
-          autoAlignLyricsFromAudio(textarea.value.trim());
-        }
       } catch (err) {
         console.warn('Decodificación de buffer:', err);
       }
@@ -2160,8 +2168,15 @@
     function onLyricsChanged() {
       updateTextCounters();
       const val = textarea.value.trim();
-      if (val.length > 0) {
-        autoAlignLyricsFromAudio(val);
+      if (/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/.test(val)) {
+        const parsed = parseLrcToLines(val);
+        if (parsed.length > 0) {
+          currentProject.lines = parsed;
+          currentProject.duration = Math.ceil(parsed[parsed.length - 1].endTime + 3);
+          renderLyricsEditor();
+          updateTimeDisplays();
+          drawWaveform();
+        }
       }
     }
 
@@ -2182,13 +2197,198 @@
       if (wordsEl) wordsEl.textContent = words.length;
     }
 
-    // --- ALINEADOR VOCAL AUTOMÁTICO BASADO EN AUDIO REAL (100% AUTOMÁTICO) ---
+    // --- CONVERSOR DE AUDIO A PCM 16KHZ MONO PARA WHISPER ---
+    async function audioBufferTo16kMono(buffer) {
+      const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const targetRate = 16000;
+      const totalSamples = Math.ceil(buffer.duration * targetRate);
+      const offlineCtx = new OfflineContextClass(1, totalSamples, targetRate);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+      const rendered = await offlineCtx.startRendering();
+      return rendered.getChannelData(0);
+    }
+
+    // --- ALINEACIÓN ACÚSTICA REAL: LETRA DEL USUARIO vs CHUNKS DE WHISPER ---
+    function normalizeWord(w) {
+      return (w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    }
+
+    function levenshtein(a, b) {
+      const an = a.length, bn = b.length;
+      if (!an) return bn;
+      if (!bn) return an;
+      const matrix = Array.from({ length: an + 1 }, () => new Int32Array(bn + 1));
+      for (let i = 0; i <= an; i++) matrix[i][0] = i;
+      for (let j = 0; j <= bn; j++) matrix[0][j] = j;
+      for (let i = 1; i <= an; i++) {
+        for (let j = 1; j <= bn; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j - 1] + cost
+          );
+        }
+      }
+      return matrix[an][bn];
+    }
+
+    function alignLyricsWithWhisperChunks(rawLyrics, whisperChunks) {
+      const rawLines = rawLyrics.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (rawLines.length === 0) return [];
+      if (!whisperChunks || whisperChunks.length === 0) return [];
+
+      const validChunks = whisperChunks.filter(c => c && c.timestamp && Array.isArray(c.timestamp) && c.timestamp[0] !== null);
+      if (validChunks.length === 0) return [];
+
+      let chunkIdx = 0;
+      const resultLines = [];
+      let lastGlobalTime = validChunks[0].timestamp[0] || 0;
+
+      for (let lIdx = 0; lIdx < rawLines.length; lIdx++) {
+        const lineText = rawLines[lIdx];
+        const tokens = lineText.split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) continue;
+
+        const lineWords = [];
+        let lineStart = null;
+        let lineEnd = null;
+
+        for (let tIdx = 0; tIdx < tokens.length; tIdx++) {
+          const tok = tokens[tIdx];
+          const normTok = normalizeWord(tok);
+
+          let bestMatchIdx = -1;
+          let minDistance = 99;
+          const searchWindow = Math.min(validChunks.length, chunkIdx + 15);
+
+          for (let k = chunkIdx; k < searchWindow; k++) {
+            const normChunk = normalizeWord(validChunks[k].text);
+            if (normChunk === normTok) {
+              bestMatchIdx = k;
+              break;
+            }
+            if (normTok.length > 2 && normChunk.length > 2) {
+              const dist = levenshtein(normTok, normChunk);
+              if (dist <= 2 && dist < minDistance) {
+                minDistance = dist;
+                bestMatchIdx = k;
+              }
+            }
+          }
+
+          let wStart, wEnd;
+          if (bestMatchIdx !== -1) {
+            chunkIdx = bestMatchIdx;
+            const chunk = validChunks[chunkIdx];
+            wStart = Math.max(lastGlobalTime, Math.round(chunk.timestamp[0] * 100) / 100);
+            wEnd = Math.max(wStart + 0.25, Math.round((chunk.timestamp[1] || (chunk.timestamp[0] + 0.45)) * 100) / 100);
+            chunkIdx++;
+          } else if (chunkIdx < validChunks.length) {
+            const chunk = validChunks[chunkIdx];
+            wStart = Math.max(lastGlobalTime, Math.round(chunk.timestamp[0] * 100) / 100);
+            wEnd = Math.max(wStart + 0.25, Math.round((chunk.timestamp[1] || (chunk.timestamp[0] + 0.35)) * 100) / 100);
+          } else {
+            wStart = Math.round(lastGlobalTime * 100) / 100;
+            wEnd = Math.round((wStart + 0.35) * 100) / 100;
+          }
+
+          lastGlobalTime = wEnd;
+          if (lineStart === null) lineStart = wStart;
+          lineEnd = wEnd;
+
+          lineWords.push({
+            id: `w-${lIdx}-${tIdx}-${Date.now()}`,
+            word: tok,
+            startTime: wStart,
+            endTime: wEnd,
+            confidence: 98
+          });
+        }
+
+        resultLines.push({
+          id: `l-${lIdx}-${Date.now()}`,
+          startTime: lineStart,
+          endTime: Math.max(lineStart + 0.5, lineEnd),
+          text: lineText,
+          confidence: 98,
+          words: lineWords
+        });
+      }
+
+      return resultLines;
+    }
+
+    // Estructurar transcripción automática de Whisper en versos legibles
+    function groupWhisperChunksIntoLines(whisperChunks) {
+      if (!whisperChunks || whisperChunks.length === 0) return [];
+      const validChunks = whisperChunks.filter(c => c && c.timestamp && Array.isArray(c.timestamp) && c.timestamp[0] !== null);
+      if (validChunks.length === 0) return [];
+
+      const lines = [];
+      let curLineWords = [];
+      let lineStart = null;
+      let lastEnd = 0;
+
+      for (let i = 0; i < validChunks.length; i++) {
+        const chunk = validChunks[i];
+        const text = (chunk.text || '').trim();
+        if (!text) continue;
+
+        const cStart = Math.round(chunk.timestamp[0] * 100) / 100;
+        const cEnd = Math.round((chunk.timestamp[1] || (chunk.timestamp[0] + 0.4)) * 100) / 100;
+
+        const pause = curLineWords.length > 0 ? (cStart - lastEnd) : 0;
+        const hasPunctuation = /[.,!?;:]$/.test(text);
+
+        if (lineStart === null) lineStart = cStart;
+
+        curLineWords.push({
+          id: `w-${lines.length}-${curLineWords.length}-${Date.now()}`,
+          word: text,
+          startTime: cStart,
+          endTime: cEnd,
+          confidence: 98
+        });
+        lastEnd = cEnd;
+
+        if (pause > 1.2 || curLineWords.length >= 8 || hasPunctuation) {
+          lines.push({
+            id: `l-${lines.length}-${Date.now()}`,
+            startTime: lineStart,
+            endTime: cEnd,
+            text: curLineWords.map(w => w.word).join(' '),
+            confidence: 98,
+            words: curLineWords
+          });
+          curLineWords = [];
+          lineStart = null;
+        }
+      }
+
+      if (curLineWords.length > 0) {
+        lines.push({
+          id: `l-${lines.length}-${Date.now()}`,
+          startTime: lineStart,
+          endTime: lastEnd,
+          text: curLineWords.map(w => w.word).join(' '),
+          confidence: 98,
+          words: curLineWords
+        });
+      }
+
+      return lines;
+    }
+
     function autoAlignLyricsFromAudio(rawText) {
       if (!rawText || typeof rawText !== 'string') return;
       const trimmed = rawText.trim();
       if (trimmed.length === 0) return;
 
-      // Si ya tiene marcas de tiempo [mm:ss.xx], parsearlas directamente
+      // Si el texto ya tiene marcas de tiempo [mm:ss.xx], parsearlas directamente
       if (/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/.test(trimmed)) {
         const parsed = parseLrcToLines(trimmed);
         if (parsed.length > 0) {
@@ -2197,74 +2397,9 @@
           renderLyricsEditor();
           updateTimeDisplays();
           drawWaveform();
-          return;
         }
       }
-
-      const rawLines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      if (rawLines.length === 0) return;
-
-      // Inicio real de la voz tras el intro instrumental (nunca asignar 0s ni 2s en un intro musical)
-      const vocalStart = (typeof detectedVocalStart === 'number' && detectedVocalStart >= 4.0)
-        ? detectedVocalStart
-        : 14.10;
-
-      const dur = (currentProject.duration && currentProject.duration > vocalStart + 10)
-        ? currentProject.duration
-        : (nativeAudio.duration && isFinite(nativeAudio.duration) && nativeAudio.duration > vocalStart + 10 ? nativeAudio.duration : vocalStart + rawLines.length * 6);
-
-      const vocalEnd = (typeof detectedVocalEnd === 'number' && detectedVocalEnd > vocalStart + 10)
-        ? detectedVocalEnd
-        : Math.max(vocalStart + 20, dur - 4);
-
-      const span = Math.max(10, vocalEnd - vocalStart);
-      const timePerLine = span / rawLines.length;
-
-      const lines = [];
-      let clock = vocalStart;
-
-      rawLines.forEach((lineText, lIdx) => {
-        let lineStart, lineEnd;
-        if (detectedVocalPhrases && detectedVocalPhrases[lIdx]) {
-          lineStart = Math.max(0, detectedVocalPhrases[lIdx].start);
-          lineEnd = Math.max(lineStart + 1.2, detectedVocalPhrases[lIdx].end);
-          clock = lineEnd;
-        } else {
-          lineStart = Math.round(clock * 100) / 100;
-          const tokens = lineText.split(/\s+/).filter(Boolean);
-          const estLineDur = Math.min(timePerLine * 0.85, Math.max(1.8, tokens.length * 0.42));
-          lineEnd = Math.round((lineStart + estLineDur) * 100) / 100;
-          clock = lineEnd + Math.max(0.6, (timePerLine - estLineDur));
-        }
-
-        const tokens = lineText.split(/\s+/).filter(Boolean);
-        const lineDur = Math.max(0.8, lineEnd - lineStart);
-        const timePerWord = lineDur / Math.max(1, tokens.length);
-
-        const words = tokens.map((tok, wIdx) => {
-          return {
-            id: `w-${lIdx}-${wIdx}-${Date.now()}`,
-            word: tok,
-            startTime: Math.round((lineStart + wIdx * timePerWord) * 100) / 100,
-            endTime: Math.round((lineStart + (wIdx + 0.92) * timePerWord) * 100) / 100,
-            confidence: 98
-          };
-        });
-
-        lines.push({
-          id: `l-${lIdx}-${Date.now()}`,
-          startTime: lineStart,
-          endTime: lineEnd,
-          text: lineText,
-          confidence: 98,
-          words: words
-        });
-      });
-
-      currentProject.lines = lines;
-      if (dur > currentProject.duration) currentProject.duration = Math.ceil(dur);
-      renderLyricsEditor();
-      updateTimeDisplays();
+    }
       drawWaveform();
     }
 
@@ -2702,15 +2837,13 @@
       return headers.concat(body).join('\n') + '\n';
     }
 
-    // --- EJECUCIÓN 100% AUTOMÁTICA DE "SYNC MY LYRICS" CON IA REAL ---
+    // --- EJECUCIÓN 100% AUTOMÁTICA DE "SYNC MY LYRICS" CON MOTOR ACÚSTICO NEURONAL REAL ---
     async function executeSyncLyrics() {
-      if (!uploadedFile) {
+      if (!uploadedFile && !nativeAudio.src) {
         showToast('Sube primero un archivo de audio para sincronizar');
+        scrollToSyncSection();
         return;
       }
-
-      const rawText = textarea.value.trim();
-      const apiKey = getSavedApiKey(); // Opcional: el servidor cuenta con NVIDIA NIM activo por defecto
 
       const btn = document.getElementById('btn-sync-lyrics');
       const spinner = document.getElementById('sync-spinner');
@@ -2719,89 +2852,136 @@
 
       spinner.classList.remove('hidden');
       icon.classList.add('hidden');
-      text.textContent = 'Codificando audio para IA...';
+      text.textContent = 'Preparando audio...';
       btn.disabled = true;
 
-      // Pre-cargar estructura de versos de inmediato para que el editor nunca quede vacío
-      if (rawText.length > 0) {
-        autoAlignLyricsFromAudio(rawText);
-      }
+      const rawText = textarea ? textarea.value.trim() : '';
 
       try {
-        // 1. Optimizar y comprimir el audio en el navegador (evita error HTTP 413 de Vercel)
-        text.textContent = 'Optimizando audio para la IA...';
-        const prep = await prepareAudioForAI(uploadedFile);
-
-        text.textContent = 'NVIDIA IA escuchando y alineando fonemas...';
-
-        const isAlignMode = rawText.length > 0;
-        const res = await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audioBase64: prep.base64,
-            audioMimeType: prep.mimeType,
-            lyrics: rawText,
-            mode: isAlignMode ? 'ALIGN_ONLY' : 'TRANSCRIBE',
-            userApiKey: apiKey,
-            vocalStart: detectedVocalStart || 0
-          })
-        });
-
-        const rawRespText = await res.text();
-        let json;
-        try {
-          json = JSON.parse(rawRespText);
-        } catch (parseErr) {
-          if (res.status === 413 || rawRespText.includes('Request Entity Too Large') || rawRespText.includes('Payload Too Large')) {
-            throw new Error('El archivo de audio excede el límite de carga de la nube (4.5 MB). Intenta con una versión más corta.');
-          }
-          throw new Error(`Error del servidor (${res.status}): ${rawRespText.slice(0, 100)}`);
+        // Asegurar que el buffer esté decodificado en memoria
+        if (!decodedAudioBuffer && uploadedFile) {
+          text.textContent = 'Decodificando audio en el navegador...';
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioCtx();
+          const arrayBuf = await uploadedFile.arrayBuffer();
+          decodedAudioBuffer = await ctx.decodeAudioData(arrayBuf);
         }
 
-        if (!res.ok || !json.success) {
-          if (json.error === 'NO_API_KEY') {
-            openApiKeyModal();
-          }
-          throw new Error(json.message || 'Error en la sincronización con IA');
+        if (!decodedAudioBuffer) {
+          throw new Error('No se pudo decodificar el buffer de audio.');
         }
 
-        if (json.data && json.data.words && json.data.words.length > 0) {
-          const lines = processLacunaWords(json.data.words);
+        text.textContent = 'Extrayendo audio a 16 kHz...';
+        const pcm16k = await audioBufferTo16kMono(decodedAudioBuffer);
 
-          if (lines.length === 0) {
-            throw new Error('La IA no pudo estructurar los versos cantados');
-          }
+        const langSelect = document.getElementById('audio-lang-select');
+        const langVal = langSelect ? langSelect.value : 'es';
 
-          currentProject.lines = lines;
-          currentProject.duration = Math.ceil(lines[lines.length - 1].endTime + 3);
+        let alignedLines = [];
 
-          if (userCredits >= 50) {
-            userCredits -= 50;
-            document.getElementById('credits-display').textContent = `${userCredits} Credits`;
-          }
+        // 1. INTENTAR PRIMERO CON EL MOTOR ACÚSTICO NEURONAL WHISPER EN EL NAVEGADOR (SIN LÍMITE DE SERVIDOR)
+        if (typeof window.runWhisperASR === 'function') {
+          try {
+            console.log('[Whisper ASR] Procesando audio...');
+            const whisperResult = await window.runWhisperASR(pcm16k, langVal, (statusMsg) => {
+              text.textContent = statusMsg;
+            });
 
-          renderLyricsEditor();
-          updateTimeDisplays();
-          drawWaveform();
-
-          const v1Start = formatTimeLrc(lines[0].startTime);
-          const vLastEnd = formatTimeLrc(lines[lines.length - 1].endTime);
-          showToast(`¡${lines.length} versos alineados con IA! (Voz: ${v1Start} -> ${vLastEnd})`);
-
-          document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
-          if (lines[0] && typeof lines[0].startTime === 'number') {
-            seekAudio(lines[0].startTime);
-            if (nativeAudio.paused) {
-              nativeAudio.play().then(() => {
-                isPlaying = true;
-                updatePlayButtonUI();
-                runTimeLoop();
-              }).catch(() => {});
+            if (whisperResult && Array.isArray(whisperResult.chunks) && whisperResult.chunks.length > 0) {
+              console.log('[Whisper ASR] Chunks acústicos detectados:', whisperResult.chunks.length);
+              if (rawText.length > 0) {
+                text.textContent = 'Alineando letra con fonemas reales...';
+                alignedLines = alignLyricsWithWhisperChunks(rawText, whisperResult.chunks);
+              } else {
+                text.textContent = 'Estructurando versos transcritos...';
+                alignedLines = groupWhisperChunksIntoLines(whisperResult.chunks);
+                if (textarea) {
+                  textarea.value = alignedLines.map(l => l.text).join('\n\n');
+                  updateTextCounters();
+                }
+              }
             }
+          } catch (whisperErr) {
+            console.warn('[Whisper WebAssembly Error]:', whisperErr);
           }
-        } else {
-          throw new Error('La respuesta de la IA no contiene palabras sincronizadas');
+        }
+
+        // 2. SI WHISPER LOCAL NO PRODUJO LÍNEAS, INTENTAR API DE BACKEND
+        if (alignedLines.length === 0) {
+          text.textContent = 'Consultando motor de IA en la nube...';
+          const apiKey = getSavedApiKey();
+          const prep = await prepareAudioForAI(uploadedFile);
+          const isAlignMode = rawText.length > 0;
+
+          const res = await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioBase64: prep.base64,
+              audioMimeType: prep.mimeType,
+              lyrics: rawText,
+              mode: isAlignMode ? 'ALIGN_ONLY' : 'TRANSCRIBE',
+              userApiKey: apiKey,
+              vocalStart: detectedVocalStart || 0
+            })
+          });
+
+          const rawRespText = await res.text();
+          let json;
+          try {
+            json = JSON.parse(rawRespText);
+          } catch (parseErr) {
+            if (res.status === 413 || rawRespText.includes('Request Entity Too Large') || rawRespText.includes('Payload Too Large')) {
+              throw new Error('El archivo de audio excede el límite de carga de la nube. Intenta con una versión más corta.');
+            }
+            throw new Error(`Error del servidor (${res.status}): ${rawRespText.slice(0, 100)}`);
+          }
+
+          if (!res.ok || !json.success) {
+            if (json.error === 'NO_API_KEY') {
+              openApiKeyModal();
+            }
+            throw new Error(json.message || 'Error en la sincronización con IA');
+          }
+
+          if (json.data && json.data.words && json.data.words.length > 0) {
+            alignedLines = processLacunaWords(json.data.words);
+          }
+        }
+
+        if (alignedLines.length === 0) {
+          throw new Error('El motor de IA no pudo detectar o alinear los fonemas de voz en este audio.');
+        }
+
+        currentProject.lines = alignedLines;
+        currentProject.duration = Math.ceil(alignedLines[alignedLines.length - 1].endTime + 3);
+        detectedVocalStart = alignedLines[0].startTime;
+        detectedVocalEnd = alignedLines[alignedLines.length - 1].endTime;
+        updateVocalBoundaryInputs();
+
+        if (userCredits >= 50) {
+          userCredits -= 50;
+          document.getElementById('credits-display').textContent = `${userCredits} Credits`;
+        }
+
+        renderLyricsEditor();
+        updateTimeDisplays();
+        drawWaveform();
+
+        const v1Start = formatTimeLrc(alignedLines[0].startTime);
+        const vLastEnd = formatTimeLrc(alignedLines[alignedLines.length - 1].endTime);
+        showToast(`¡${alignedLines.length} versos alineados con voz real! (Voz detectada: ${v1Start} -> ${vLastEnd})`);
+
+        document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
+        if (alignedLines[0] && typeof alignedLines[0].startTime === 'number') {
+          seekAudio(alignedLines[0].startTime);
+          if (nativeAudio.paused) {
+            nativeAudio.play().then(() => {
+              isPlaying = true;
+              updatePlayButtonUI();
+              runTimeLoop();
+            }).catch(() => {});
+          }
         }
       } catch (err) {
         console.error('Error al sincronizar con IA:', err);

@@ -75,41 +75,8 @@ function cleanAndParseJSON(raw: string, fallbackLyrics: string = ''): any {
     return { language: 'es', words };
   }
 
-  // 5. Ultimate Fallback: Synthesize from user lyrics if present
-  if (fallbackLyrics && fallbackLyrics.trim().length > 0) {
-    const lines = fallbackLyrics.trim().split('\n');
-    const synthWords: any[] = [];
-    let curTime = 14.10;
-
-    lines.forEach((line) => {
-      const pureLine = line.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, '').trim();
-      if (!pureLine) return;
-      const tokens = pureLine.split(/\s+/).filter(Boolean);
-      const span = Math.max(1.8, tokens.length * 0.45);
-      const wSpan = span / Math.max(1, tokens.length);
-
-      tokens.forEach((tok, idx) => {
-        const isEnd = (idx === tokens.length - 1);
-        const wStart = Math.round(curTime * 100) / 100;
-        const wEnd = Math.round((curTime + wSpan * 0.95) * 100) / 100;
-        synthWords.push({
-          word: isEnd ? (tok + '\n') : (tok + ' '),
-          startS: wStart,
-          endS: wEnd,
-          palign: 0.95,
-          success: true,
-        });
-        curTime += wSpan;
-      });
-      curTime += 1.2;
-    });
-
-    if (synthWords.length > 0) {
-      return { language: 'es', words: synthWords };
-    }
-  }
-
-  throw new Error('No se pudieron extraer fonemas vocales del audio ni estructurar las marcas de tiempo.');
+  // Throw honest error if AI fails to return timestamps
+  throw new Error('El modelo de IA no devolvió marcas de tiempo fonéticas válidas para este audio.');
 }
 
 async function alignWithNvidia(apiKey: string, audioBase64: string, format: string, lyrics: string, isAlignOnly: boolean) {
