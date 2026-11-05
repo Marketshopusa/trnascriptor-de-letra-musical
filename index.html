@@ -964,6 +964,13 @@
       }
 
       if (nativeAudio.paused) {
+        // Si hay letra en el textarea pero aún no se ha sincronizado, sincronizarla automáticamente
+        if (currentProject.lines.length === 0 && textarea && textarea.value.trim().length > 0) {
+          showToast('Sincronizando letra con el audio...');
+          executeSyncLyrics();
+          return;
+        }
+
         nativeAudio.play().then(() => {
           isPlaying = true;
           updatePlayButtonUI();
@@ -2571,6 +2578,16 @@
           showToast(`¡${lines.length} versos alineados con IA! (Voz: ${v1Start} -> ${vLastEnd})`);
 
           document.getElementById('studio-editor-section').scrollIntoView({ behavior: 'smooth' });
+          if (lines[0] && typeof lines[0].startTime === 'number') {
+            seekAudio(lines[0].startTime);
+            if (nativeAudio.paused) {
+              nativeAudio.play().then(() => {
+                isPlaying = true;
+                updatePlayButtonUI();
+                runTimeLoop();
+              }).catch(() => {});
+            }
+          }
         } else {
           throw new Error('La respuesta de la IA no contiene palabras sincronizadas');
         }
