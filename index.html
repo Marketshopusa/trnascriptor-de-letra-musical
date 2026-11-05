@@ -2080,9 +2080,6 @@
       if (file) {
         handleFileSelection(file);
       }
-      if (e.target) {
-        e.target.value = '';
-      }
     }
 
     const dropzone = document.getElementById('dropzone');
@@ -2146,11 +2143,13 @@
       decodedAudioBuffer = null;
       waveformPeaks = [];
       detectedVocalOnsets = [];
-      audioInput.value = '';
+      const audioInputEl = document.getElementById('audio-input');
+      if (audioInputEl) {
+        audioInputEl.value = '';
+        audioInputEl.classList.remove('hidden');
+      }
       document.getElementById('dropzone-empty').classList.remove('hidden');
       document.getElementById('dropzone-loaded').classList.add('hidden');
-      const audioInputEl = document.getElementById('audio-input');
-      if (audioInputEl) audioInputEl.classList.remove('hidden');
       document.getElementById('current-track-badge').textContent = 'A la espera de audio...';
       drawWaveform();
       updateTimeDisplays();
@@ -2399,8 +2398,6 @@
           drawWaveform();
         }
       }
-    }
-      drawWaveform();
     }
 
     // --- PARSEADOR PROFESIONAL DE FORMATO .LRC (ESTÁNDAR Y ENHANCED) ---
@@ -2799,42 +2796,6 @@
       });
 
       return lines;
-    }
-
-    // --- EXPORTADOR ENHANCED LRC OFICIAL ESTÁNDAR A2 (IDÉNTICO A LACUNA.FM) ---
-    function generateEnhancedLrc() {
-      const headers = [
-        `[ti:${currentProject.title || 'Untitled'}]`,
-        `[ar:${currentProject.artist || 'Unknown'}]`,
-        `[re:Lacuna Studio LRC Generator]`,
-        `[ve:2.4.0-Enhanced]`,
-        `[offset:0]`,
-        ''
-      ];
-      const body = currentProject.lines.map(line => {
-        const lineStartTag = formatTimeLrc(line.startTime);
-        // Cada palabra tiene su <mm:ss.xx>palabra y al final del verso el tag de cierre de voz <mm:ss.xx>
-        const wordsFormatted = line.words.map(w => `${formatTimeWordTag(w.startTime)}${w.word}`).join(' ');
-        const lineEndTag = formatTimeWordTag(line.endTime);
-        return `${lineStartTag}${wordsFormatted} ${lineEndTag}`;
-      });
-      return headers.concat(body).join('\n') + '\n';
-    }
-
-    function generateStandardLrc() {
-      const headers = [
-        `[ti:${currentProject.title || 'Untitled'}]`,
-        `[ar:${currentProject.artist || 'Unknown'}]`,
-        `[by:Lacuna Studio]`,
-        `[offset:0]`,
-        ''
-      ];
-      const body = currentProject.lines.map(line => {
-        const lineStartTag = formatTimeLrc(line.startTime);
-        const text = line.words.map(w => w.word).join(' ');
-        return `${lineStartTag}${text}`;
-      });
-      return headers.concat(body).join('\n') + '\n';
     }
 
     // --- EJECUCIÓN 100% AUTOMÁTICA DE "SYNC MY LYRICS" CON MOTOR ACÚSTICO NEURONAL REAL ---
